@@ -94,7 +94,8 @@
   function showExtensions(e: MouseEvent) {
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const w = token("--ext-panel-collapsed-width");
-    const h = 420;
+    // 처음 높이는 버튼 위 공간을 넘지 않게 (아래 끝이 버튼 아래 끝에 맞도록). 팝업이 내용 높이로 다시 맞춘다
+    const h = Math.min(420, r.bottom - 8);
     const x = r.right + 4;
     const anchor = { x: x + w + 8, bottom: r.bottom };
     host4.popupShow("extensions", { x, y: Math.max(8, r.bottom - h), w, h }, { url: activeTab()?.url ?? "", anchor }).catch(report);

@@ -33,6 +33,8 @@ pub struct Record {
     pub id: String,
     pub enabled: bool,
     pub pinned: bool,
+    /// 사용자가 마지막으로 둔 팝업 창 크기 (논리 px). 없으면 내용에 맞춘다
+    pub popup_size: Option<[f64; 2]>,
 }
 
 #[derive(Serialize, Deserialize, Default)]
@@ -624,10 +626,22 @@ fn install_into(app: &AppHandle, root: &Path, info: &Info, existing: Option<Stri
             return Err(e);
         }
     };
-    store.records.lock().unwrap().push(Record { folder, id, enabled: true, pinned: false });
+    store.records.lock().unwrap().push(Record { folder, id, enabled: true, pinned: false, popup_size: None });
     save(app)?;
     log::info(format!("확장 설치: {} {}", info.name, info.version));
     Ok(())
+}
+
+pub fn popup_size(app: &AppHandle, id: &str) -> Option<(f64, f64)> {
+    app.state::<ExtStore>().records.lock().unwrap().iter().find(|r| r.id == id).and_then(|r| r.popup_size).map(|[w, h]| (w, h))
+}
+
+/// 팝업 창을 닫을 때의 크기를 기억한다 (다음에 그 크기로 연다)
+pub fn remember_popup_size(app: &AppHandle, id: &str, (w, h): (f64, f64)) {
+    if let Some(r) = app.state::<ExtStore>().records.lock().unwrap().iter_mut().find(|r| r.id == id) {
+        r.popup_size = Some([w.round(), h.round()]);
+    }
+    let _ = save(app);
 }
 
 pub fn is_enabled(app: &AppHandle, id: &str) -> bool {
@@ -644,6 +658,9 @@ pub fn set_enabled(app: &AppHandle, id: &str, on: bool) -> Result<(), String> {
     enable(app, id, on)?;
     if on {
         reload_tabs(app, id);
+    } else {
+        let (a, i) = (app.clone(), id.to_string());
+        crate::browser::later(app, move |_| crate::popup::close_extension_of(&a, &i));
     }
     if let Some(r) = app.state::<ExtStore>().records.lock().unwrap().iter_mut().find(|r| r.id == id) {
         r.enabled = on;
@@ -664,6 +681,8 @@ pub fn set_pinned(app: &AppHandle, id: &str, pinned: bool) -> Result<(), String>
 
 /// 프로필에서 지우고 폴더도 지운다. 확장이 저장한 데이터도 WebView2가 지운다 (UI가 먼저 묻는다).
 pub fn remove(app: &AppHandle, id: &str) -> Result<(), String> {
+    let (a, i) = (app.clone(), id.to_string());
+    crate::browser::later(app, move |_| crate::popup::close_extension_of(&a, &i));
     with_extension(app, id.to_string(), |e, tx| unsafe {
         let tx2 = tx.clone();
         let h = BrowserExtensionRemoveCompletedHandler::create(Box::new(move |err| {

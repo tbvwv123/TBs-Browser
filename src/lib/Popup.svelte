@@ -2,7 +2,7 @@
   // 콘텐츠 위에 뜨는 팝업 창의 화면 (spec 3장 배치): 주소창 자동완성, 진행 중인 다운로드,
   // 접힌 사이드바의 메뉴와 북마크 목록 (spec 4.6).
   // 창은 투명하고, 그림자를 그릴 여백(왼쪽·오른쪽·아래 16px)을 둔다.
-  import { onMount } from "svelte";
+  import { onMount, tick } from "svelte";
   import { host4, host5, host9, on, readableUrl, fileName, formatBytes, type Suggestion, type Download, type BookmarkNode, type ExtInfo, type ScriptInfo } from "./api";
   import ExtensionsPanel from "./ExtensionsPanel.svelte";
   import InstallConfirm from "./InstallConfirm.svelte";
@@ -23,17 +23,25 @@
   let exts = $state<ExtInfo[]>([]);
   // 확장 패널·설치 확인은 내용 높이에 창을 맞춘다
   let fitted = $state<HTMLElement>();
+  // 내용 높이를 재서 창을 맞춘다. 다시 띄울 때 내용 높이가 그대로면 ResizeObserver가 부르지 않으므로
+  // 띄울 때마다 직접도 부른다 (창 크기는 띄울 때 다시 정해진다)
+  function refit() {
+    requestAnimationFrame(() => {
+      if (fitted) host9.popupFit(Math.ceil(fitted.getBoundingClientRect().height)).catch(() => {});
+    });
+  }
   $effect(() => {
     if (!fitted) return;
-    const el = fitted;
-    const ro = new ResizeObserver(() => host9.popupFit(Math.ceil(el.getBoundingClientRect().height)).catch(() => {}));
-    ro.observe(el);
+    const ro = new ResizeObserver(refit);
+    ro.observe(fitted);
     return () => ro.disconnect();
   });
 
   function loadLists() {
-    host5.scriptsList().then((l) => (scripts = l), (e) => (error = String(e)));
-    host9.extList().then((l) => (exts = l), (e) => (error = String(e)));
+    Promise.all([
+      host5.scriptsList().then((l) => (scripts = l)),
+      host9.extList().then((l) => (exts = l)),
+    ]).then(() => tick().then(refit), (e) => (error = String(e)));
   }
 
   // 북마크 목록에서 펼친 폴더 (이 목록 안에서만. 사이드바의 접힘 상태는 바꾸지 않는다)
@@ -50,6 +58,7 @@
       if (d.kind === "extensions") loadLists();
       view = d;
       error = "";
+      if (d.kind === "extensions" || d.kind === "install") tick().then(refit);
     });
     const offs = [
       on<ScriptInfo[]>("scripts_changed", (l) => (scripts = l)),
@@ -96,7 +105,8 @@
 {/snippet}
 
 {#if view?.kind === "extensions"}
-  <div class="fit" bind:this={fitted}>
+  <!-- 확장 패널은 버튼에 아래 끝을 맞춘다: 창 높이를 맞추기 전에도 버튼 옆에 보이게 아래에 붙여 그린다 -->
+  <div class="fit bottom" bind:this={fitted}>
     <ExtensionsPanel scripts={scripts} extensions={exts} url={view.data.url} onError={(e) => (error = String(e))} popupAnchor={() => (view as any).data.anchor} />
     {#if error}<p class="error fit-error">{error}</p>{/if}
   </div>
@@ -168,6 +178,10 @@
     left: 16px;
     right: 16px;
     top: 0;
+  }
+  .fit.bottom {
+    top: auto;
+    bottom: 16px;
   }
   .fit-error {
     margin: 6px 0 0;

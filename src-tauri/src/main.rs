@@ -446,7 +446,9 @@ async fn ext_remove(app: AppHandle, id: String) -> Result<(), String> {
 async fn ext_open_popup(app: AppHandle, id: String, x: f64, bottom: f64) -> Result<(), String> {
     let page = extensions::page_of(&app, &id, false)?;
     let url = extensions::page_url(&id, &page)?;
-    on_main(&app, move |a| popup::show_extension(a, url, x, bottom))?
+    let name = extensions::list(&app).into_iter().find(|i| i.id == id).map(|i| i.name).unwrap_or_default();
+    let saved = extensions::popup_size(&app, &id);
+    on_main(&app, move |a| popup::show_extension(a, &id, &name, url, x, bottom, saved))?
 }
 
 /// 확장의 설정 페이지를 새 탭으로 연다
@@ -704,10 +706,8 @@ fn main() {
                     // 다른 창으로 가면 주소창이 포커스를 잃으면서 UI가 닫는다.
                     if matches!(e, tauri::WindowEvent::Moved(_) | tauri::WindowEvent::Resized(_)) {
                         let h2 = h.clone();
-                        let _ = h.run_on_main_thread(move || {
-                            popup::hide(&h2);
-                            popup::close_extension(&h2);
-                        });
+                        // 확장 팝업은 보통 창이라 따라 닫지 않는다
+                        let _ = h.run_on_main_thread(move || popup::hide(&h2));
                     }
                     if let tauri::WindowEvent::Resized(_) = e {
                         let _ = h.emit_to(EventTarget::webview(UI_WEBVIEW), "window_maximized", w2.is_maximized().unwrap_or(false));

@@ -128,41 +128,72 @@ pub fn refresh_downloads(app: &AppHandle) {
 
 // ───────────── 크롬 확장의 팝업 (spec 6.6) ─────────────
 
-pub const EXT_LABEL: &str = "extpopup";
-/// 처음 크기. 불러온 뒤 내용 크기에 맞춘다 (작게 시작해야 내용이 자기 폭을 드러낸다)
-const EXT_START: (f64, f64) = (200.0, 120.0);
-const EXT_MAX: (f64, f64) = (800.0, 600.0);
+/// 확장마다 창 하나 ("extpopup-<확장 ID>")
+pub const EXT_LABEL_PREFIX: &str = "extpopup-";
+/// 크기를 기억해 두지 않았을 때의 처음 크기. 불러온 뒤 내용 크기에 맞춘다 (작게 시작해야 내용이 자기 폭을 드러낸다)
+const EXT_START: (f64, f64) = (240.0, 160.0);
+const EXT_MIN: (f64, f64) = (160.0, 80.0);
 
-/// 확장 팝업 페이지를 띄운다. 아래 끝이 `bottom`(메인 창 안쪽 좌표)에 오게 위로 펼친다.
-/// 키보드 입력을 받아야 하므로 포커스를 받는 창이고, 포커스를 잃으면 닫는다. 앱 명령 권한은 없다(capabilities에 없음).
-pub fn show_extension(app: &AppHandle, url: tauri::Url, x: f64, bottom: f64) -> Result<(), String> {
-    close_extension(app);
+fn ext_label(id: &str) -> String {
+    format!("{EXT_LABEL_PREFIX}{id}")
+}
+
+/// 확장 팝업 페이지를 창으로 띄운다. 아래 끝이 `bottom`(메인 창 안쪽 좌표)에 오게 위로 펼친다.
+/// 제목 표시줄이 있어 옮기고 크기를 바꿀 수 있고, 닫을 때까지 떠 있다. 닫을 때의 크기를 확장마다 기억한다.
+/// 키보드 입력을 받는 보통 창이고, 앱 명령 권한은 없다 (capabilities에 없음).
+pub fn show_extension(app: &AppHandle, id: &str, name: &str, url: tauri::Url, x: f64, bottom: f64, saved: Option<(f64, f64)>) -> Result<(), String> {
     hide(app);
+    let label = ext_label(id);
+    // 이미 떠 있으면 앞으로 가져온다
+    if let Some(w) = app.get_webview_window(&label) {
+        let _ = w.unminimize();
+        let _ = w.show();
+        let _ = w.set_focus();
+        return Ok(());
+    }
     let main = app.get_window(crate::browser::MAIN_WINDOW).ok_or("브라우저 창을 찾지 못했습니다.")?;
     let scale = main.scale_factor().unwrap_or(1.0);
     let origin = main.inner_position().map_err(|e| e.to_string())?.to_logical::<f64>(scale);
     let anchor = (origin.x + x, origin.y + bottom);
+    let size = saved.unwrap_or(EXT_START);
     let app2 = app.clone();
-    let w = WebviewWindowBuilder::new(app, EXT_LABEL, WebviewUrl::External(url))
+    let label2 = label.clone();
+    let fit = saved.is_none();
+    let w = WebviewWindowBuilder::new(app, &label, WebviewUrl::External(url))
+        .title(name)
         .data_directory(paths::webview_dir())
         .browser_extensions_enabled(true)
-        .decorations(false)
-        .shadow(true)
+        .decorations(true)
+        .resizable(true)
+        .minimizable(false)
+        .maximizable(false)
         .skip_taskbar(true)
-        .resizable(false)
         .visible(false)
         .focused(!crate::dev::quiet())
         .owner_raw(main.hwnd().map_err(|e| e.to_string())?)
-        .inner_size(EXT_START.0, EXT_START.1)
-        .position(anchor.0, (anchor.1 - EXT_START.1).max(origin.y + 8.0))
+        .inner_size(size.0, size.1)
+        .min_inner_size(EXT_MIN.0, EXT_MIN.1)
+        .position(anchor.0, (anchor.1 - size.1).max(origin.y + 8.0))
         .on_page_load(move |_, payload| {
-            if matches!(payload.event(), tauri::webview::PageLoadEvent::Finished) {
-                let a = app2.clone();
-                crate::browser::later(&app2, move |_| fit_extension(&a, anchor));
+            if fit && matches!(payload.event(), tauri::webview::PageLoadEvent::Finished) {
+                // 팝업 내용은 불러온 뒤에도 그려지는 데 시간이 걸린다. 세 번 재서 커지기만 한다
+                for delay in [0u64, 400, 1200] {
+                    let (a, l) = (app2.clone(), label2.clone());
+                    std::thread::spawn(move || {
+                        std::thread::sleep(std::time::Duration::from_millis(delay));
+                        let a2 = a.clone();
+                        let _ = a.run_on_main_thread(move || fit_extension(&a2, &l, anchor));
+                    });
+                }
             }
         })
         .build()
         .map_err(|e| format!("확장 팝업을 띄우지 못했습니다({e})."))?;
+    // 제목 표시줄까지 넣은 창의 아래 끝이 기준 자리에 오게 다시 놓는다
+    if let Ok(outer) = w.outer_size() {
+        let outer = outer.to_logical::<f64>(scale);
+        let _ = w.set_position(LogicalPosition::new(anchor.0, (anchor.1 - outer.height).max(origin.y + 8.0)));
+    }
     if let Ok(h) = w.hwnd() {
         crate::dev::move_to_dev_desktop(h.0 as isize);
         unsafe {
@@ -172,30 +203,48 @@ pub fn show_extension(app: &AppHandle, url: tauri::Url, x: f64, bottom: f64) -> 
     if !crate::dev::quiet() {
         let _ = w.set_focus();
     }
-    // 팝업 페이지가 "지금 탭"을 물으면 답한다 (spec 6.6 호환층)
-    let app4 = app.clone();
+    // 팝업 페이지가 "지금 탭"을 물으면 답한다 (spec 6.6 호환층).
+    // 확장 팝업은 일을 마치면 window.close()로 스스로 닫는 일이 많다. WebView2는 그 요청만 알려 주므로 창을 닫는다.
+    let (app4, label4) = (app.clone(), label.clone());
     let _ = w.with_webview(move |p| {
         if let Ok(core) = unsafe { p.controller().CoreWebView2() } {
             crate::ext_compat::listen(&app4, &core);
+            let (a, l) = (app4.clone(), label4.clone());
+            let mut token = 0i64;
+            unsafe {
+                let _ = core.add_WindowCloseRequested(
+                    &webview2_com::WindowCloseRequestedEventHandler::create(Box::new(move |_, _| {
+                        let (a2, l2) = (a.clone(), l.clone());
+                        crate::browser::later(&a, move |_| {
+                            if let Some(w) = a2.get_webview_window(&l2) {
+                                let _ = w.close();
+                            }
+                        });
+                        Ok(())
+                    })),
+                    &mut token,
+                );
+            }
         }
     });
-    // 한 번 포커스를 받은 뒤에 잃으면 닫는다. 만들어지는 동안의 포커스 변화로 바로 닫히지 않게 한다.
-    let app3 = app.clone();
-    let was_focused = std::sync::atomic::AtomicBool::new(false);
-    w.on_window_event(move |e| match e {
-        tauri::WindowEvent::Focused(true) => was_focused.store(true, std::sync::atomic::Ordering::Relaxed),
-        tauri::WindowEvent::Focused(false) if was_focused.load(std::sync::atomic::Ordering::Relaxed) => {
-            crate::browser::later(&app3, close_extension)
+    // 닫을 때의 크기를 기억한다
+    let (app3, id3, w3) = (app.clone(), id.to_string(), w.clone());
+    w.on_window_event(move |e| {
+        if let tauri::WindowEvent::CloseRequested { .. } = e {
+            let scale = w3.scale_factor().unwrap_or(1.0);
+            if let Ok(s) = w3.inner_size() {
+                let s = s.to_logical::<f64>(scale);
+                crate::extensions::remember_popup_size(&app3, &id3, (s.width, s.height));
+            }
         }
-        _ => {}
     });
     Ok(())
 }
 
-/// 팝업 내용의 크기를 재서 창을 맞춘다
-fn fit_extension(app: &AppHandle, anchor: (f64, f64)) {
-    let Some(w) = app.get_webview_window(EXT_LABEL) else { return };
-    let app2 = app.clone();
+/// 팝업 내용의 크기를 재서 창을 키운다 (줄이지는 않는다). 아래 끝은 처음 자리를 지킨다
+fn fit_extension(app: &AppHandle, label: &str, anchor: (f64, f64)) {
+    let Some(w) = app.get_webview_window(label) else { return };
+    let (app2, label2) = (app.clone(), label.to_string());
     let _ = w.with_webview(move |p| unsafe {
         let Ok(core) = p.controller().CoreWebView2() else { return };
         let js = windows::core::w!("JSON.stringify([document.documentElement.scrollWidth, document.documentElement.scrollHeight])");
@@ -204,14 +253,8 @@ fn fit_extension(app: &AppHandle, anchor: (f64, f64)) {
                 // 결과는 JSON 글자를 다시 감싼 것이다: "\"[300,420]\""
                 let inner: String = serde_json::from_str(&res).unwrap_or_default();
                 if let Ok([cw, ch]) = serde_json::from_str::<[f64; 2]>(&inner) {
-                    let a = app2.clone();
-                    crate::browser::later(&app2, move |_| {
-                        if let Some(w) = a.get_webview_window(EXT_LABEL) {
-                            let (cw, ch) = (cw.clamp(EXT_START.0, EXT_MAX.0), ch.clamp(60.0, EXT_MAX.1));
-                            let _ = w.set_size(LogicalSize::new(cw, ch));
-                            let _ = w.set_position(LogicalPosition::new(anchor.0, (anchor.1 - ch).max(8.0)));
-                        }
-                    });
+                    let (a, l) = (app2.clone(), label2.clone());
+                    crate::browser::later(&app2, move |_| grow_extension(&a, &l, anchor, cw, ch));
                 }
             }
             Ok(())
@@ -220,8 +263,37 @@ fn fit_extension(app: &AppHandle, anchor: (f64, f64)) {
     });
 }
 
-pub fn close_extension(app: &AppHandle) {
-    if let Some(w) = app.get_webview_window(EXT_LABEL) {
+fn grow_extension(app: &AppHandle, label: &str, anchor: (f64, f64), cw: f64, ch: f64) {
+    let (Some(w), Some(main)) = (app.get_webview_window(label), app.get_window(crate::browser::MAIN_WINDOW)) else { return };
+    let scale = w.scale_factor().unwrap_or(1.0);
+    let (Ok(inner), Ok(outer)) = (w.inner_size(), w.outer_size()) else { return };
+    let (inner, outer) = (inner.to_logical::<f64>(scale), outer.to_logical::<f64>(scale));
+    let main_h = main.inner_size().map(|s| s.to_logical::<f64>(scale).height).unwrap_or(800.0);
+    // 스크롤 막대가 생기지 않게 조금 여유를 둔다. 메인 창보다 크게는 하지 않는다
+    let want_w = (cw + 2.0).clamp(inner.width, 900.0);
+    let want_h = (ch + 2.0).clamp(inner.height, (main_h - 40.0).max(inner.height));
+    if want_w <= inner.width + 0.5 && want_h <= inner.height + 0.5 {
+        return;
+    }
+    let _ = w.set_size(LogicalSize::new(want_w, want_h));
+    let chrome = outer.height - inner.height;
+    let top = (anchor.1 - want_h - chrome).max(8.0);
+    let _ = w.set_position(LogicalPosition::new(anchor.0, top));
+}
+
+/// 그 확장의 팝업 창을 닫는다 (확장을 끄거나 지울 때)
+pub fn close_extension_of(app: &AppHandle, id: &str) {
+    if let Some(w) = app.get_webview_window(&ext_label(id)) {
         let _ = w.close();
+    }
+}
+
+/// 떠 있는 확장 팝업을 모두 닫는다
+#[allow(dead_code)]
+pub fn close_extension(app: &AppHandle) {
+    for (label, w) in app.webview_windows() {
+        if label.starts_with(EXT_LABEL_PREFIX) {
+            let _ = w.close();
+        }
     }
 }
