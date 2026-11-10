@@ -39,6 +39,8 @@ pub enum Event {
     Permission { uri: String, kind: &'static str, args: ICoreWebView2PermissionRequestedEventArgs },
     /// 페이지가 포커스를 받았다 (페이지를 눌렀다). 떠 있는 팝업을 닫는다.
     GotFocus,
+    /// 맨 위 문서가 이 주소로 이동하기 시작했다 (넘겨주기 포함). 광고 차단이 스크립틀릿을 미리 건다
+    Navigating(String),
     /// 오른쪽 클릭 메뉴를 띄우려 한다. 확장 항목을 더할 수 있다 (처리기 안에서 바로 고친다)
     ContextMenu(ICoreWebView2ContextMenuRequestedEventArgs),
 }
@@ -139,7 +141,13 @@ pub fn hook(controller: &ICoreWebView2Controller, core: &ICoreWebView2, sink: Rc
 
         let s = sink.clone();
         core.add_NavigationStarting(
-            &NavigationStartingEventHandler::create(Box::new(move |_, _| {
+            &NavigationStartingEventHandler::create(Box::new(move |_, args| {
+                if let Some(a) = args {
+                    let mut uri = PWSTR::null();
+                    if a.Uri(&mut uri).is_ok() {
+                        s(Event::Navigating(take_pwstr(uri)));
+                    }
+                }
                 s(Event::Loading(true));
                 Ok(())
             })),

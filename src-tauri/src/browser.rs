@@ -680,6 +680,12 @@ fn on_event(app: &AppHandle, id: TabId, ev: Event) {
             }
             return;
         }
+        Event::Navigating(uri) => {
+            if let Some(c) = core(id) {
+                crate::adblock::navigating(app, id, &c, &uri);
+            }
+            return;
+        }
         // 확장이 만든 오른쪽 클릭 메뉴 항목을 넣는다 (spec 6.6)
         Event::ContextMenu(args) => return crate::ext_compat::extend_menu(app, id, &args),
         Event::Completed(ok) => {

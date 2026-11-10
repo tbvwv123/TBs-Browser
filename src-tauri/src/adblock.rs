@@ -1,9 +1,13 @@
 //! 광고 차단 (spec 6.7). 확장의 네트워크 차단(declarativeNetRequest)이 WebView2에서 동작하지 않으므로 브라우저가 직접 한다.
 //!
-//! - 엔진: Brave의 adblock-rust. 목록은 EasyList, EasyPrivacy, List-KR. `adblock\`에 받아 두고 하루에 한 번 새로 받는다.
+//! - 엔진: Brave의 adblock-rust. 목록은 EasyList, EasyPrivacy, List-KR, uBlock filters. `adblock\`에 받아 두고 하루에 한 번 새로 받는다.
 //! - 네트워크 차단: 탭마다 모든 요청에 WebResourceRequested 필터를 걸고, 막을 요청에는 빈 응답(403)을 준다.
-//!   페이지 문서 자체는 막지 않는다. 서비스 워커를 거치는 요청은 가로채지 못한다 (0단계 9번).
-//! - 화면 숨기기: 페이지마다 작은 스크립트(COSMETIC_JS)를 넣어 숨길 선택자를 호스트에 묻고 스타일로 숨긴다.
+//!   페이지 문서 자체는 막지 않는다. 서비스 워커가 보내는 요청도 이 필터에 걸린다 (WebView2 157에서 확인).
+//! - 틀(iframe): 맨 위 문서가 아닌 문서 요청은 sub_frame으로 검사해 막는다.
+//! - 화면 숨기기: 문서마다(틀 포함) 작은 스크립트(COSMETIC_JS)를 넣어 숨길 선택자를 호스트에 묻고 스타일로 숨긴다.
+//! - 스크립틀릿(`+js(...)`): uBlock Origin의 스크립틀릿(정해 둔 판)을 숨은 웹뷰에서 읽어 엔진 자원으로 바꿔 두고
+//!   (`scriptlets.json`), Brave 자원(resources.json)과 함께 엔진에 넣는다. 맨 위 문서가 이동을 시작할 때 그 주소에 맞는
+//!   스크립트를 문서보다 먼저 돌도록 건다. 페이지 스크립트로 넣는 광고(유튜브 영상 광고 등)를 끈다.
 //! - 사이트별 끄기: settings.json의 adblock.disabledSites. 막은 개수는 탭마다 세고, 새 페이지를 불러오면 0부터 센다.
 
 use std::{
@@ -15,14 +19,14 @@ use std::{
     time::Duration,
 };
 
-use adblock::{lists::{FilterSet, ParseOptions}, request::Request, Engine};
+use adblock::{lists::{FilterSet, ParseOptions}, request::Request, resources::{PermissionMask, Resource}, Engine};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use tauri::{AppHandle, Url};
+use tauri::{AppHandle, LogicalPosition, LogicalSize, Manager, Url, WebviewUrl};
 use webview2_com::{Microsoft::Web::WebView2::Win32::*, *};
 use windows::core::{Interface, HSTRING, PWSTR};
 
-use crate::{log, native, paths, settings, state::TabId, storage};
+use crate::{browser, log, native, paths, settings, state::TabId, storage};
 use std::result::Result;
 
 pub struct ListDef {
@@ -30,25 +34,48 @@ pub struct ListDef {
     pub name: &'static str,
     /// 설정 화면의 보조 글자 ("광고")
     pub kind: &'static str,
-    url: &'static str,
+    /// 받아서 이어 붙이는 주소들
+    urls: &'static [&'static str],
+    /// 믿는 목록: `trusted-` 스크립틀릿을 쓸 수 있다 (uBlock Origin이 자기 목록에만 허락하는 것과 같다)
+    trusted: bool,
 }
 
-pub const LISTS: [ListDef; 3] = [
-    ListDef { id: "easylist", name: "EasyList", kind: "광고", url: "https://easylist.to/easylist/easylist.txt" },
-    ListDef { id: "easyprivacy", name: "EasyPrivacy", kind: "추적기", url: "https://easylist.to/easylist/easyprivacy.txt" },
+pub const LISTS: [ListDef; 4] = [
+    ListDef { id: "easylist", name: "EasyList", kind: "광고", urls: &["https://easylist.to/easylist/easylist.txt"], trusted: false },
+    ListDef { id: "easyprivacy", name: "EasyPrivacy", kind: "추적기", urls: &["https://easylist.to/easylist/easyprivacy.txt"], trusted: false },
     ListDef {
         id: "listkr",
         name: "List-KR",
         kind: "한국 사이트",
-        url: "https://cdn.jsdelivr.net/npm/@list-kr/filterslists@latest/dist/filterslist-uBlockOrigin.txt",
+        urls: &["https://cdn.jsdelivr.net/npm/@list-kr/filterslists@latest/dist/filterslist-uBlockOrigin.txt"],
+        trusted: false,
+    },
+    ListDef {
+        id: "ubo",
+        name: "uBlock filters",
+        kind: "영상 광고·고치기",
+        urls: &[
+            "https://ublockorigin.github.io/uAssets/filters/filters.min.txt",
+            "https://ublockorigin.github.io/uAssets/filters/quick-fixes.min.txt",
+            "https://ublockorigin.github.io/uAssets/filters/unbreak.min.txt",
+        ],
+        trusted: true,
     },
 ];
 
+/// 믿는 목록에 주는 권한 비트 (`requiresTrust` 스크립틀릿)
+const TRUSTED: PermissionMask = PermissionMask::from_bits(1);
+/// 스크립틀릿을 가져오는 uBlock Origin 판 (GPL-3.0. 받아서 이 컴퓨터에서만 쓴다)
+const UBO_VERSION: &str = "1.75.4";
+const SCRIPTLETS_LABEL: &str = "adblock-scriptlets";
+
 const DAY_MS: i64 = 24 * 60 * 60 * 1000;
+/// 스크립틀릿 자원 (Brave adblock-resources, MPL-2.0. 안의 스크립틀릿은 uBlock Origin 것이다)
+const RESOURCES_URL: &str = "https://raw.githubusercontent.com/brave/adblock-resources/master/dist/resources.json";
 
 /// 페이지에 넣는 화면 숨기기 스크립트. 숨길 선택자를 호스트에 묻고, 새로 생기는 class·id도 물어 본다.
 const COSMETIC_JS: &str = r#"(() => {
-  if (window.top !== window || !window.chrome || !chrome.webview || window.__tbsAdblock) return;
+  if (!window.chrome || !chrome.webview || window.__tbsAdblock) return;
   window.__tbsAdblock = true;
   const post = (m) => chrome.webview.postMessage(JSON.stringify({ __tbs_adblock: m }));
   let style = null, generic = true;
@@ -91,6 +118,18 @@ struct ListMeta {
     rules: usize,
 }
 
+/// `scriptlets.json`: uBlock Origin 스크립틀릿을 엔진 자원 꼴로 바꾼 것
+#[derive(Serialize, Deserialize, Default)]
+#[serde(default)]
+struct ScriptletsFile {
+    version: String,
+    made: i64,
+    resources: Vec<Resource>,
+}
+
+/// 스크립틀릿을 만드는 중 (한 번에 하나만)
+static MAKING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 #[serde(default)]
 struct MetaFile {
@@ -121,6 +160,10 @@ thread_local! {
     static COUNTS: RefCell<HashMap<TabId, u32>> = RefCell::new(HashMap::new());
     /// "*" 필터를 건 탭 (WebView2 객체)
     static FILTERED: RefCell<HashMap<TabId, ICoreWebView2>> = RefCell::new(HashMap::new());
+    /// 탭마다 맨 위 문서가 지금 이동하는 주소 (틀 문서와 가르기 위해)
+    static MAIN_NAV: RefCell<HashMap<TabId, String>> = RefCell::new(HashMap::new());
+    /// 탭마다 걸어 둔 스크립틀릿의 WebView2 스크립트 ID
+    static SCRIPTLETS: RefCell<HashMap<TabId, String>> = RefCell::new(HashMap::new());
 }
 
 fn dir() -> PathBuf {
@@ -149,7 +192,8 @@ fn download(url: &str) -> Result<String, String> {
     let text = r.map_err(|e| format!("목록을 받지 못했습니다({e}). 인터넷 연결을 확인해 주세요.")).and_then(|_| fs::read_to_string(&tmp).map_err(|e| e.to_string()));
     let _ = fs::remove_file(&tmp);
     let text = text?;
-    if !text.contains('\n') || text.len() < 200 {
+    // 목록은 여러 줄, 스크립틀릿 자원(JSON 배열)은 한 줄로 온다
+    if text.len() < 200 || !(text.contains('\n') || text.trim_start().starts_with('[')) {
         return Err("받은 목록이 비어 있습니다. 잠시 뒤 다시 갱신해 주세요.".into());
     }
     Ok(text)
@@ -172,7 +216,8 @@ fn rebuild(app: &AppHandle, refresh: bool) {
         let stale = meta.lists.get(l.id).is_none_or(|m| now - m.updated > DAY_MS);
         let mut text = fs::read_to_string(&path).ok();
         if refresh || stale || text.is_none() {
-            match download(l.url) {
+            let got: Result<Vec<String>, String> = l.urls.iter().map(|u| download(u)).collect();
+            match got.map(|parts| parts.join("\n")) {
                 Ok(t) => {
                     let _ = fs::write(&path, &t);
                     meta.lists.insert(l.id.to_string(), ListMeta { updated: now, rules: 0 });
@@ -184,12 +229,40 @@ fn rebuild(app: &AppHandle, refresh: bool) {
         if let Some(t) = text {
             let rules = t.lines().filter(|x| !x.trim().is_empty() && !x.starts_with('!') && !x.starts_with('[')).count();
             meta.lists.entry(l.id.to_string()).or_default().rules = rules;
-            set.add_filter_list(t, ParseOptions::default());
+            let opts = ParseOptions { permissions: if l.trusted { TRUSTED } else { PermissionMask::default() }, ..Default::default() };
+            set.add_filter_list(t, opts);
         }
+    }
+    // 스크립틀릿 자원
+    let res_path = dir().join("resources.json");
+    let res_stale = meta.lists.get("resources").is_none_or(|m| now - m.updated > DAY_MS);
+    if refresh || res_stale || !res_path.exists() {
+        match download(RESOURCES_URL) {
+            Ok(t) => {
+                let _ = fs::write(&res_path, &t);
+                meta.lists.insert("resources".into(), ListMeta { updated: now, rules: 0 });
+            }
+            Err(e) => errors.push(format!("스크립틀릿 자원: {e}")),
+        }
+    }
+    let mut resources: Vec<Resource> =
+        fs::read_to_string(&res_path).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
+    if let Some(m) = meta.lists.get_mut("resources") {
+        m.rules = resources.len();
+    }
+    // uBlock Origin 스크립틀릿: 없거나 판이 다르면 숨은 웹뷰에서 새로 만든다 (다 되면 엔진을 다시 만든다)
+    let sc: ScriptletsFile = storage::load(&scriptlets_file()).ok().flatten().unwrap_or_default();
+    if sc.version != UBO_VERSION || sc.resources.is_empty() {
+        request_scriptlets(app);
+    }
+    if !sc.resources.is_empty() {
+        meta.lists.insert("scriptlets".into(), ListMeta { updated: sc.made, rules: sc.resources.len() });
+        resources.extend(sc.resources);
     }
     meta.version = 1;
     let _ = storage::save(&meta_file(), &meta);
-    let engine = Engine::new_with_filter_set(set);
+    let mut engine = Engine::new_with_filter_set(set);
+    engine.use_resources(resources);
     with(|s| {
         s.engine = Some(Arc::new(engine));
         s.meta = meta;
@@ -200,6 +273,122 @@ fn rebuild(app: &AppHandle, refresh: bool) {
         log::warn(format!("광고 차단 목록 갱신 실패: {}", errors.join(" / ")));
     }
     log::info("광고 차단 엔진 준비됨");
+}
+
+fn scriptlets_file() -> PathBuf {
+    dir().join("scriptlets.json")
+}
+
+/// uBlock Origin의 스크립틀릿 모듈을 불러와 엔진 자원 꼴(JSON)로 바꾸는 식. 함수의 소스만 꺼내고 돌리지는 않는다.
+fn scriptlets_expr() -> String {
+    format!(
+        r#"(async () => {{
+  const m = await import("https://cdn.jsdelivr.net/gh/gorhill/uBlock@{UBO_VERSION}/src/js/resources/scriptlets.js");
+  const b64 = (s) => {{ const u = new TextEncoder().encode(s); let t = ""; for (let i = 0; i < u.length; i += 0x8000) t += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(t); }};
+  return JSON.stringify(m.builtinScriptlets.map((s) => {{
+    const r = {{ name: s.name, aliases: s.aliases || [], kind: {{ mime: s.name.endsWith(".fn") ? "fn/javascript" : "application/javascript" }}, content: b64(s.fn.toString()), dependencies: (s.dependencies || []).filter((d) => typeof d === "string") }};
+    if (s.requiresTrust) r.permission = 1;
+    return r;
+  }}));
+}})()"#
+    )
+}
+
+/// 숨은 웹뷰를 띄워 스크립틀릿을 만들게 한다 (어느 스레드에서 불러도 된다)
+fn request_scriptlets(app: &AppHandle) {
+    if MAKING.swap(true, std::sync::atomic::Ordering::SeqCst) {
+        return;
+    }
+    let a = app.clone();
+    browser::later(app, move |app| {
+        if let Err(e) = make_scriptlets(app) {
+            scriptlets_done(app, Err(e));
+        }
+    });
+    // 1분 안에 끝나지 않으면 그만둔다
+    let a2 = a.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_secs(60));
+        if MAKING.load(std::sync::atomic::Ordering::SeqCst) {
+            scriptlets_done(&a2, Err("시간이 너무 오래 걸립니다".into()));
+        }
+    });
+}
+
+fn make_scriptlets(app: &AppHandle) -> Result<(), String> {
+    let win = app.get_window(browser::MAIN_WINDOW).ok_or("브라우저 창이 없습니다")?;
+    let mut b = tauri::webview::WebviewBuilder::new(SCRIPTLETS_LABEL, WebviewUrl::External(Url::parse("about:blank").unwrap()))
+        .data_directory(paths::webview_dir())
+        .browser_extensions_enabled(true)
+        .focused(false);
+    if let Some(env) = browser::environment() {
+        b = b.with_environment(env);
+    }
+    let wv = win.add_child(b, LogicalPosition::new(0.0, 0.0), LogicalSize::new(1.0, 1.0)).map_err(|e| e.to_string())?;
+    let _ = wv.hide();
+    // about:blank은 불러오기 끝 알림이 오지 않는다. 빈 문서가 자리 잡을 때까지 조금 기다렸다가 돌린다
+    let app2 = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(1500));
+        let a = app2.clone();
+        let _ = app2.run_on_main_thread(move || {
+            let Some(wv) = a.get_webview(SCRIPTLETS_LABEL) else { return };
+            let a2 = a.clone();
+            let _ = wv.with_webview(move |p| unsafe {
+                let Ok(core) = p.controller().CoreWebView2() else { return };
+                let params = json!({ "expression": scriptlets_expr(), "awaitPromise": true, "returnByValue": true }).to_string();
+                let h = CallDevToolsProtocolMethodCompletedHandler::create(Box::new(move |err, res| {
+                    scriptlets_done(&a2, if err.is_ok() { parse_scriptlets(&res) } else { Err(format!("{err:?}")) });
+                    Ok(())
+                }));
+                let _ = core.CallDevToolsProtocolMethod(&HSTRING::from("Runtime.evaluate"), &HSTRING::from(params), &h);
+            });
+        });
+    });
+    Ok(())
+}
+
+/// DevTools의 Runtime.evaluate 결과에서 자원 목록을 꺼낸다
+fn parse_scriptlets(res: &str) -> Result<Vec<Resource>, String> {
+    let v: Value = serde_json::from_str(res).map_err(|e| e.to_string())?;
+    if let Some(ex) = v.get("exceptionDetails") {
+        let msg = ex.pointer("/exception/description").and_then(Value::as_str).unwrap_or("스크립트 오류");
+        return Err(msg.lines().next().unwrap_or_default().to_string());
+    }
+    let text = v.pointer("/result/value").and_then(Value::as_str).ok_or("결과가 비어 있습니다")?;
+    let list: Vec<Resource> = serde_json::from_str(text).map_err(|e| e.to_string())?;
+    if list.len() < 20 {
+        return Err(format!("스크립틀릿이 {}개뿐입니다", list.len()));
+    }
+    Ok(list)
+}
+
+fn scriptlets_done(app: &AppHandle, result: Result<Vec<Resource>, String>) {
+    if !MAKING.swap(false, std::sync::atomic::Ordering::SeqCst) {
+        return;
+    }
+    browser::later(app, |app| {
+        if let Some(wv) = app.get_webview(SCRIPTLETS_LABEL) {
+            let _ = wv.close();
+        }
+    });
+    match result {
+        Ok(resources) => {
+            let file = ScriptletsFile { version: UBO_VERSION.into(), made: crate::history::now_ms(), resources };
+            if let Err(e) = storage::save(&scriptlets_file(), &file) {
+                log::warn(format!("스크립틀릿을 저장하지 못함: {e}"));
+                return;
+            }
+            log::info(format!("uBlock Origin {UBO_VERSION} 스크립틀릿 {}개를 만듦", file.resources.len()));
+            let app = app.clone();
+            std::thread::spawn(move || rebuild(&app, false));
+        }
+        Err(e) => {
+            let msg = format!("스크립틀릿을 만들지 못했습니다({e}). 인터넷 연결을 확인하고 설정에서 '지금 갱신'을 눌러 주세요.");
+            log::warn(&msg);
+            with(|s| s.error = Some(msg));
+        }
+    }
 }
 
 /// 시작할 때: 설정을 읽고, 엔진을 만들고, 하루에 한 번 목록을 새로 받는다
@@ -304,9 +493,16 @@ pub fn attach(app: &AppHandle, core: &ICoreWebView2, env: ICoreWebView2Environme
         let (Some(wv), Some(args)) = (wv, args) else { return Ok(()) };
         let mut ctx = COREWEBVIEW2_WEB_RESOURCE_CONTEXT::default();
         args.ResourceContext(&mut ctx)?;
-        // 페이지 문서는 막지 않는다 (틀에 담긴 문서도. 그 안의 요청은 막는다)
+        let mut uri = PWSTR::null();
+        args.Request()?.Uri(&mut uri)?;
+        let uri = native_take(uri);
+        // 맨 위 문서는 막지 않는다. 그 밖의 문서 요청은 틀(sub_frame)이다
+        let mut kind = request_type(ctx);
         if ctx == COREWEBVIEW2_WEB_RESOURCE_CONTEXT_DOCUMENT {
-            return Ok(());
+            if MAIN_NAV.with(|m| m.borrow().get(&id).is_none_or(|u| *u == uri)) {
+                return Ok(());
+            }
+            kind = "sub_frame";
         }
         let (engine, page_site_off) = {
             let page = native::source(&wv);
@@ -315,13 +511,10 @@ pub fn attach(app: &AppHandle, core: &ICoreWebView2, env: ICoreWebView2Environme
         };
         let (off, page) = page_site_off;
         let Some(engine) = engine.filter(|_| !off) else { return Ok(()) };
-        let mut uri = PWSTR::null();
-        args.Request()?.Uri(&mut uri)?;
-        let uri = native_take(uri);
         if !uri.starts_with("http") {
             return Ok(());
         }
-        let Ok(req) = Request::new(&uri, &page, request_type(ctx), "GET") else { return Ok(()) };
+        let Ok(req) = Request::new(&uri, &page, kind, "GET") else { return Ok(()) };
         if engine.check_network_request(&req).should_block() {
             let resp = env.CreateWebResourceResponse(None, 403, &HSTRING::from("Blocked"), &HSTRING::from(""))?;
             args.SetResponse(&resp)?;
@@ -333,13 +526,82 @@ pub fn attach(app: &AppHandle, core: &ICoreWebView2, env: ICoreWebView2Environme
     if with(|s| s.enabled) {
         set_filter(id, core, true);
     }
+    // 틀 안의 화면 숨기기 스크립트는 틀마다 메시지를 받는다 (맨 위 문서의 처리기로는 오지 않는다)
+    if let Ok(c4) = core.cast::<ICoreWebView2_4>() {
+        let mut t = 0i64;
+        let top = core.clone();
+        unsafe {
+            let _ = c4.add_FrameCreated(
+                &FrameCreatedEventHandler::create(Box::new(move |_, args| {
+                    let top = top.clone();
+                    let Some(frame) = args.and_then(|a| a.Frame().ok()).and_then(|f| f.cast::<ICoreWebView2Frame2>().ok()) else { return Ok(()) };
+                    let mut t2 = 0i64;
+                    let _ = frame.add_WebMessageReceived(
+                        &FrameWebMessageReceivedEventHandler::create(Box::new(move |f, args| {
+                            let (Some(f), Some(args)) = (f.and_then(|f| f.cast::<ICoreWebView2Frame2>().ok()), args) else { return Ok(()) };
+                            let mut src = PWSTR::null();
+                            let mut text = PWSTR::null();
+                            args.Source(&mut src)?;
+                            if args.TryGetWebMessageAsString(&mut text).is_ok() {
+                                // 사이트별 끄기는 틀이 아니라 탭의 맨 위 페이지를 따른다
+                                let page = native::source(&top);
+                                if let Some(Some(reply)) = cosmetic_reply(&page, &native_take(src), &native_take(text)) {
+                                    let _ = f.PostWebMessageAsJson(&HSTRING::from(reply));
+                                }
+                            }
+                            Ok(())
+                        })),
+                        &mut t2,
+                    );
+                    Ok(())
+                })),
+                &mut t,
+            );
+        }
+    }
     Some(token)
+}
+
+/// 맨 위 문서가 이동을 시작했다: 틀과 가를 주소를 남기고, 그 주소의 스크립틀릿을 문서보다 먼저 돌도록 건다
+pub fn navigating(app: &AppHandle, id: TabId, core: &ICoreWebView2, uri: &str) {
+    let _ = app;
+    MAIN_NAV.with(|m| m.borrow_mut().insert(id, uri.to_string()));
+    // 앞 페이지의 스크립틀릿은 뗀다
+    if let Some(old) = SCRIPTLETS.with(|s| s.borrow_mut().remove(&id)) {
+        unsafe {
+            let _ = core.RemoveScriptToExecuteOnDocumentCreated(&HSTRING::from(old));
+        }
+    }
+    let Some(host) = host_of(uri) else { return };
+    let script = with(|s| (s.enabled && !s.disabled.contains(&host)).then(|| s.engine.clone()).flatten())
+        .map(|e| e.url_cosmetic_resources(uri).injected_script)
+        .unwrap_or_default();
+    if script.trim().is_empty() {
+        return;
+    }
+    // 다른 사이트로 넘어간 뒤의 문서에는 돌지 않게 호스트를 확인한다
+    let full = Url::parse(uri).ok().and_then(|u| u.host_str().map(str::to_string)).unwrap_or_default();
+    let js = format!(
+        "(()=>{{if(window.top!==window||location.hostname!=={}||window.__tbsScriptlets)return;window.__tbsScriptlets=true;const scriptletGlobals={{}};try{{{script}\n}}catch(e){{}}}})();",
+        serde_json::to_string(&full).unwrap_or_default()
+    );
+    unsafe {
+        let h = AddScriptToExecuteOnDocumentCreatedCompletedHandler::create(Box::new(move |err, sid| {
+            if err.is_ok() {
+                SCRIPTLETS.with(|s| s.borrow_mut().insert(id, sid));
+            }
+            Ok(())
+        }));
+        let _ = core.AddScriptToExecuteOnDocumentCreated(&HSTRING::from(js), &h);
+    }
 }
 
 pub fn detach(core: &ICoreWebView2, id: TabId, token: i64) {
     unsafe {
         let _ = core.remove_WebResourceRequested(token);
     }
+    MAIN_NAV.with(|m| m.borrow_mut().remove(&id));
+    SCRIPTLETS.with(|s| s.borrow_mut().remove(&id));
     FILTERED.with(|f| f.borrow_mut().remove(&id));
     COUNTS.with(|c| c.borrow_mut().remove(&id));
 }
@@ -361,10 +623,26 @@ fn native_take(p: PWSTR) -> String {
 
 /// 페이지의 화면 숨기기 스크립트가 보낸 메시지면 답하고 참을 돌려준다
 pub fn handle_message(core: &ICoreWebView2, source: &str, text: &str) -> bool {
-    let Ok(v) = serde_json::from_str::<Value>(text) else { return false };
-    let Some(m) = v.get("__tbs_adblock") else { return false };
-    let off = host_of(source).is_none_or(|h| with(|s| !s.enabled || s.disabled.contains(&h)));
-    let Some(engine) = with(|s| s.engine.clone()).filter(|_| !off) else { return true };
+    match cosmetic_reply(source, source, text) {
+        None => false,
+        Some(reply) => {
+            if let Some(r) = reply {
+                unsafe {
+                    let _ = core.PostWebMessageAsJson(&HSTRING::from(r));
+                }
+            }
+            true
+        }
+    }
+}
+
+/// 화면 숨기기 메시지의 답. 이 메시지가 아니면 None, 답할 것이 없으면 Some(None).
+/// `page`는 탭의 맨 위 페이지(사이트별 끄기를 가른다), `source`는 메시지를 보낸 문서(맨 위 또는 틀)
+fn cosmetic_reply(page: &str, source: &str, text: &str) -> Option<Option<String>> {
+    let v = serde_json::from_str::<Value>(text).ok()?;
+    let m = v.get("__tbs_adblock")?;
+    let off = host_of(page).is_none_or(|h| with(|s| !s.enabled || s.disabled.contains(&h)));
+    let Some(engine) = with(|s| s.engine.clone()).filter(|_| !off) else { return Some(None) };
     let res = engine.url_cosmetic_resources(source);
     let reply = match m.get("kind").and_then(|k| k.as_str()) {
         Some("page") => {
@@ -377,16 +655,13 @@ pub fn handle_message(core: &ICoreWebView2, source: &str, text: &str) -> bool {
             };
             let sel = engine.hidden_class_id_selectors(list("classes"), list("ids"), &res.exceptions);
             if sel.is_empty() {
-                return true;
+                return Some(None);
             }
             json!({ "__tbs_adblock_css": { "hide": sel } })
         }
-        _ => return true,
+        _ => return Some(None),
     };
-    unsafe {
-        let _ = core.PostWebMessageAsJson(&HSTRING::from(reply.to_string()));
-    }
-    true
+    Some(Some(reply.to_string()))
 }
 
 // ───────────── UI에 보일 상태 ─────────────
@@ -468,5 +743,27 @@ mod tests {
     fn site_names() {
         assert_eq!(host_of("https://www.youtube.com/watch?v=1").as_deref(), Some("youtube.com"));
         assert_eq!(host_of("tbs://settings"), None);
+    }
+
+    /// uBlock Origin 꼴(함수) 스크립틀릿과 trusted 권한
+    #[test]
+    fn scriptlets_and_trust() {
+        // 내용은 base64: "function setFlag(a){}", "function trustedFlag(a){}"
+        let res = |name: &str, content: &str, permission: u8| {
+            let v = json!({ "name": name, "kind": { "mime": "application/javascript" }, "content": content, "permission": permission });
+            serde_json::from_value::<Resource>(v).unwrap()
+        };
+        let reply = parse_scriptlets(&json!({ "result": { "value": "[]" } }).to_string());
+        assert!(reply.is_err());
+        let mut set = FilterSet::new(false);
+        set.add_filter_list("plain.kr##+js(set-flag, 1)\nplain.kr##+js(trusted-flag, 2)".into(), ParseOptions::default());
+        let opts = ParseOptions { permissions: TRUSTED, ..Default::default() };
+        set.add_filter_list("trusted.kr##+js(trusted-flag, 3)".into(), opts);
+        let mut e = Engine::new_with_filter_set(set);
+        e.use_resources([res("set-flag.js", "ZnVuY3Rpb24gc2V0RmxhZyhhKXt9", 0), res("trusted-flag.js", "ZnVuY3Rpb24gdHJ1c3RlZEZsYWcoYSl7fQ==", 1)]);
+        let plain = e.url_cosmetic_resources("https://plain.kr/").injected_script;
+        assert!(plain.contains("setFlag(\"1\")") && !plain.contains("trustedFlag"));
+        let trusted = e.url_cosmetic_resources("https://trusted.kr/").injected_script;
+        assert!(trusted.contains("trustedFlag(\"3\")"));
     }
 }
