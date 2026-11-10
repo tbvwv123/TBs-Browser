@@ -820,7 +820,7 @@ pub fn reload_extension_tabs(app: &AppHandle, ext: &str) {
 }
 
 /// 탭을 빈 탭(새 탭 화면)으로 되돌린다. 웹뷰는 닫는다.
-fn to_blank(app: &AppHandle, id: TabId) {
+pub fn to_blank(app: &AppHandle, id: TabId) {
     {
         let b = browser(app);
         let mut tabs = b.tabs.lock().unwrap();

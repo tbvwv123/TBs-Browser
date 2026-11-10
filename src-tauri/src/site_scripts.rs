@@ -313,8 +313,9 @@ pub fn handle_message(app: &AppHandle, tab: TabId, core: &ICoreWebView2, source:
     match perm {
         Permission::Tabs => {
             let action = data.get("action").and_then(Value::as_str).unwrap_or("").to_string();
-            if !["back", "forward", "reload", "close", "newTab", "reopen", "next", "prev"].contains(&action.as_str()) {
-                return reply(Err(format!("탭에 \"{action}\"은(는) 할 수 없습니다. back, forward, reload, close, newTab, reopen, next, prev만 됩니다.")));
+            const ACTIONS: [&str; 12] = ["back", "forward", "reload", "close", "newTab", "reopen", "next", "prev", "home", "fullscreen", "maximize", "minimize"];
+            if !ACTIONS.contains(&action.as_str()) {
+                return reply(Err(format!("탭에 \"{action}\"은(는) 할 수 없습니다. {}만 됩니다.", ACTIONS.join(", "))));
             }
             reply(Ok(Value::Null));
             // 이 처리기 안에서 탭을 닫거나 만들지 않는다
@@ -326,7 +327,21 @@ pub fn handle_message(app: &AppHandle, tab: TabId, core: &ICoreWebView2, source:
                 "newTab" => crate::shortcuts::run(a, "new_tab"),
                 "reopen" => crate::shortcuts::run(a, "reopen_tab"),
                 "next" => crate::browser::activate_neighbor(a, true),
-                _ => crate::browser::activate_neighbor(a, false),
+                "prev" => crate::browser::activate_neighbor(a, false),
+                // 홈: 이 탭을 새 탭 화면으로
+                "home" => crate::browser::to_blank(a, tab),
+                "fullscreen" => crate::browser::toggle_fullscreen(a),
+                _ => {
+                    if let Some(w) = a.get_window(crate::browser::MAIN_WINDOW) {
+                        if action == "minimize" {
+                            let _ = w.minimize();
+                        } else if w.is_maximized().unwrap_or(false) {
+                            let _ = w.unmaximize();
+                        } else {
+                            let _ = w.maximize();
+                        }
+                    }
+                }
             });
         }
         Permission::Storage if kind == "setSetting" => {

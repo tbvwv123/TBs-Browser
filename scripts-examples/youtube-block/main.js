@@ -90,11 +90,9 @@ function scan() {
   for (const c of document.querySelectorAll(COMMENTS)) {
     const ch = channelOfComment(c);
     const box = (!c.closest("#replies") && c.closest("ytd-comment-thread-renderer")) || c;
+    // 댓글에는 차단 버튼을 달지 않는다. 차단한 채널의 댓글만 숨긴다
     if (tbs.settings.comments && isBlocked(ch)) hide(box);
-    else {
-      show(box);
-      if (tbs.settings.comments) addButton(c, ch);
-    }
+    else show(box);
   }
 }
 

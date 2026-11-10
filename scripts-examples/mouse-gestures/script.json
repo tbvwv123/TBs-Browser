@@ -1,8 +1,8 @@
 {
   "id": "mouse-gestures",
   "name": "마우스 제스처",
-  "version": "1.0.0",
-  "description": "오른쪽 버튼을 누른 채 끌면 궤적을 그리고, 방향에 따라 뒤로·앞으로·새로고침·탭 닫기·새 탭·닫은 탭 되살리기를 합니다. 끌지 않고 누르면 원래 오른쪽 클릭 메뉴가 뜹니다.",
+  "version": "1.1.0",
+  "description": "오른쪽 버튼을 누른 채 끌면 궤적을 그리고, 방향에 따라 동작을 합니다. 기본 배치는 네이버 웨일과 같습니다(이 브라우저에 없는 새 창·시크릿 창은 없음). 끌지 않고 누르면 원래 오른쪽 클릭 메뉴가 뜹니다.",
   "author": "TB's Browser",
   "icon": "icon.svg",
   "matches": [
@@ -36,20 +36,52 @@
           "label": "앞으로"
         },
         {
-          "value": "reload",
-          "label": "새로고침"
+          "value": "top",
+          "label": "맨 위로"
         },
         {
-          "value": "close",
-          "label": "탭 닫기"
+          "value": "bottom",
+          "label": "맨 아래로"
+        },
+        {
+          "value": "home",
+          "label": "홈 (새 탭 화면)"
+        },
+        {
+          "value": "reload",
+          "label": "새로고침"
         },
         {
           "value": "newTab",
           "label": "새 탭"
         },
         {
+          "value": "close",
+          "label": "탭 닫기"
+        },
+        {
           "value": "reopen",
           "label": "닫은 탭 되살리기"
+        },
+        {
+          "value": "prev",
+          "label": "이전 탭"
+        },
+        {
+          "value": "next",
+          "label": "다음 탭"
+        },
+        {
+          "value": "fullscreen",
+          "label": "전체 화면"
+        },
+        {
+          "value": "maximize",
+          "label": "창 최대화"
+        },
+        {
+          "value": "minimize",
+          "label": "창 최소화"
         },
         {
           "value": "none",
@@ -74,20 +106,52 @@
           "label": "앞으로"
         },
         {
-          "value": "reload",
-          "label": "새로고침"
+          "value": "top",
+          "label": "맨 위로"
         },
         {
-          "value": "close",
-          "label": "탭 닫기"
+          "value": "bottom",
+          "label": "맨 아래로"
+        },
+        {
+          "value": "home",
+          "label": "홈 (새 탭 화면)"
+        },
+        {
+          "value": "reload",
+          "label": "새로고침"
         },
         {
           "value": "newTab",
           "label": "새 탭"
         },
         {
+          "value": "close",
+          "label": "탭 닫기"
+        },
+        {
           "value": "reopen",
           "label": "닫은 탭 되살리기"
+        },
+        {
+          "value": "prev",
+          "label": "이전 탭"
+        },
+        {
+          "value": "next",
+          "label": "다음 탭"
+        },
+        {
+          "value": "fullscreen",
+          "label": "전체 화면"
+        },
+        {
+          "value": "maximize",
+          "label": "창 최대화"
+        },
+        {
+          "value": "minimize",
+          "label": "창 최소화"
         },
         {
           "value": "none",
@@ -101,7 +165,7 @@
       "label": "위",
       "section": "제스처마다 할 동작",
       "icon": "arrows/u.svg",
-      "default": "reopen",
+      "default": "top",
       "options": [
         {
           "value": "back",
@@ -112,20 +176,52 @@
           "label": "앞으로"
         },
         {
-          "value": "reload",
-          "label": "새로고침"
+          "value": "top",
+          "label": "맨 위로"
         },
         {
-          "value": "close",
-          "label": "탭 닫기"
+          "value": "bottom",
+          "label": "맨 아래로"
+        },
+        {
+          "value": "home",
+          "label": "홈 (새 탭 화면)"
+        },
+        {
+          "value": "reload",
+          "label": "새로고침"
         },
         {
           "value": "newTab",
           "label": "새 탭"
         },
         {
+          "value": "close",
+          "label": "탭 닫기"
+        },
+        {
           "value": "reopen",
           "label": "닫은 탭 되살리기"
+        },
+        {
+          "value": "prev",
+          "label": "이전 탭"
+        },
+        {
+          "value": "next",
+          "label": "다음 탭"
+        },
+        {
+          "value": "fullscreen",
+          "label": "전체 화면"
+        },
+        {
+          "value": "maximize",
+          "label": "창 최대화"
+        },
+        {
+          "value": "minimize",
+          "label": "창 최소화"
         },
         {
           "value": "none",
@@ -139,7 +235,7 @@
       "label": "아래",
       "section": "제스처마다 할 동작",
       "icon": "arrows/d.svg",
-      "default": "newTab",
+      "default": "bottom",
       "options": [
         {
           "value": "back",
@@ -150,20 +246,52 @@
           "label": "앞으로"
         },
         {
-          "value": "reload",
-          "label": "새로고침"
+          "value": "top",
+          "label": "맨 위로"
         },
         {
-          "value": "close",
-          "label": "탭 닫기"
+          "value": "bottom",
+          "label": "맨 아래로"
+        },
+        {
+          "value": "home",
+          "label": "홈 (새 탭 화면)"
+        },
+        {
+          "value": "reload",
+          "label": "새로고침"
         },
         {
           "value": "newTab",
           "label": "새 탭"
         },
         {
+          "value": "close",
+          "label": "탭 닫기"
+        },
+        {
           "value": "reopen",
           "label": "닫은 탭 되살리기"
+        },
+        {
+          "value": "prev",
+          "label": "이전 탭"
+        },
+        {
+          "value": "next",
+          "label": "다음 탭"
+        },
+        {
+          "value": "fullscreen",
+          "label": "전체 화면"
+        },
+        {
+          "value": "maximize",
+          "label": "창 최대화"
+        },
+        {
+          "value": "minimize",
+          "label": "창 최소화"
         },
         {
           "value": "none",
@@ -172,12 +300,12 @@
       ]
     },
     {
-      "key": "g_DR",
+      "key": "g_LR",
       "type": "select",
-      "label": "아래 → 오른쪽",
+      "label": "왼쪽 → 오른쪽",
       "section": "제스처마다 할 동작",
-      "icon": "arrows/dr.svg",
-      "default": "close",
+      "icon": "arrows/lr.svg",
+      "default": "home",
       "options": [
         {
           "value": "back",
@@ -188,20 +316,122 @@
           "label": "앞으로"
         },
         {
-          "value": "reload",
-          "label": "새로고침"
+          "value": "top",
+          "label": "맨 위로"
         },
         {
-          "value": "close",
-          "label": "탭 닫기"
+          "value": "bottom",
+          "label": "맨 아래로"
+        },
+        {
+          "value": "home",
+          "label": "홈 (새 탭 화면)"
+        },
+        {
+          "value": "reload",
+          "label": "새로고침"
         },
         {
           "value": "newTab",
           "label": "새 탭"
         },
         {
+          "value": "close",
+          "label": "탭 닫기"
+        },
+        {
           "value": "reopen",
           "label": "닫은 탭 되살리기"
+        },
+        {
+          "value": "prev",
+          "label": "이전 탭"
+        },
+        {
+          "value": "next",
+          "label": "다음 탭"
+        },
+        {
+          "value": "fullscreen",
+          "label": "전체 화면"
+        },
+        {
+          "value": "maximize",
+          "label": "창 최대화"
+        },
+        {
+          "value": "minimize",
+          "label": "창 최소화"
+        },
+        {
+          "value": "none",
+          "label": "없음"
+        }
+      ]
+    },
+    {
+      "key": "g_RL",
+      "type": "select",
+      "label": "오른쪽 → 왼쪽",
+      "section": "제스처마다 할 동작",
+      "icon": "arrows/rl.svg",
+      "default": "home",
+      "options": [
+        {
+          "value": "back",
+          "label": "뒤로"
+        },
+        {
+          "value": "forward",
+          "label": "앞으로"
+        },
+        {
+          "value": "top",
+          "label": "맨 위로"
+        },
+        {
+          "value": "bottom",
+          "label": "맨 아래로"
+        },
+        {
+          "value": "home",
+          "label": "홈 (새 탭 화면)"
+        },
+        {
+          "value": "reload",
+          "label": "새로고침"
+        },
+        {
+          "value": "newTab",
+          "label": "새 탭"
+        },
+        {
+          "value": "close",
+          "label": "탭 닫기"
+        },
+        {
+          "value": "reopen",
+          "label": "닫은 탭 되살리기"
+        },
+        {
+          "value": "prev",
+          "label": "이전 탭"
+        },
+        {
+          "value": "next",
+          "label": "다음 탭"
+        },
+        {
+          "value": "fullscreen",
+          "label": "전체 화면"
+        },
+        {
+          "value": "maximize",
+          "label": "창 최대화"
+        },
+        {
+          "value": "minimize",
+          "label": "창 최소화"
         },
         {
           "value": "none",
@@ -226,20 +456,402 @@
           "label": "앞으로"
         },
         {
-          "value": "reload",
-          "label": "새로고침"
+          "value": "top",
+          "label": "맨 위로"
         },
         {
-          "value": "close",
-          "label": "탭 닫기"
+          "value": "bottom",
+          "label": "맨 아래로"
+        },
+        {
+          "value": "home",
+          "label": "홈 (새 탭 화면)"
+        },
+        {
+          "value": "reload",
+          "label": "새로고침"
         },
         {
           "value": "newTab",
           "label": "새 탭"
         },
         {
+          "value": "close",
+          "label": "탭 닫기"
+        },
+        {
           "value": "reopen",
           "label": "닫은 탭 되살리기"
+        },
+        {
+          "value": "prev",
+          "label": "이전 탭"
+        },
+        {
+          "value": "next",
+          "label": "다음 탭"
+        },
+        {
+          "value": "fullscreen",
+          "label": "전체 화면"
+        },
+        {
+          "value": "maximize",
+          "label": "창 최대화"
+        },
+        {
+          "value": "minimize",
+          "label": "창 최소화"
+        },
+        {
+          "value": "none",
+          "label": "없음"
+        }
+      ]
+    },
+    {
+      "key": "g_DU",
+      "type": "select",
+      "label": "아래 → 위",
+      "section": "제스처마다 할 동작",
+      "icon": "arrows/du.svg",
+      "default": "reload",
+      "options": [
+        {
+          "value": "back",
+          "label": "뒤로"
+        },
+        {
+          "value": "forward",
+          "label": "앞으로"
+        },
+        {
+          "value": "top",
+          "label": "맨 위로"
+        },
+        {
+          "value": "bottom",
+          "label": "맨 아래로"
+        },
+        {
+          "value": "home",
+          "label": "홈 (새 탭 화면)"
+        },
+        {
+          "value": "reload",
+          "label": "새로고침"
+        },
+        {
+          "value": "newTab",
+          "label": "새 탭"
+        },
+        {
+          "value": "close",
+          "label": "탭 닫기"
+        },
+        {
+          "value": "reopen",
+          "label": "닫은 탭 되살리기"
+        },
+        {
+          "value": "prev",
+          "label": "이전 탭"
+        },
+        {
+          "value": "next",
+          "label": "다음 탭"
+        },
+        {
+          "value": "fullscreen",
+          "label": "전체 화면"
+        },
+        {
+          "value": "maximize",
+          "label": "창 최대화"
+        },
+        {
+          "value": "minimize",
+          "label": "창 최소화"
+        },
+        {
+          "value": "none",
+          "label": "없음"
+        }
+      ]
+    },
+    {
+      "key": "g_UL",
+      "type": "select",
+      "label": "위 → 왼쪽",
+      "section": "제스처마다 할 동작",
+      "icon": "arrows/ul.svg",
+      "default": "none",
+      "options": [
+        {
+          "value": "back",
+          "label": "뒤로"
+        },
+        {
+          "value": "forward",
+          "label": "앞으로"
+        },
+        {
+          "value": "top",
+          "label": "맨 위로"
+        },
+        {
+          "value": "bottom",
+          "label": "맨 아래로"
+        },
+        {
+          "value": "home",
+          "label": "홈 (새 탭 화면)"
+        },
+        {
+          "value": "reload",
+          "label": "새로고침"
+        },
+        {
+          "value": "newTab",
+          "label": "새 탭"
+        },
+        {
+          "value": "close",
+          "label": "탭 닫기"
+        },
+        {
+          "value": "reopen",
+          "label": "닫은 탭 되살리기"
+        },
+        {
+          "value": "prev",
+          "label": "이전 탭"
+        },
+        {
+          "value": "next",
+          "label": "다음 탭"
+        },
+        {
+          "value": "fullscreen",
+          "label": "전체 화면"
+        },
+        {
+          "value": "maximize",
+          "label": "창 최대화"
+        },
+        {
+          "value": "minimize",
+          "label": "창 최소화"
+        },
+        {
+          "value": "none",
+          "label": "없음"
+        }
+      ]
+    },
+    {
+      "key": "g_UR",
+      "type": "select",
+      "label": "위 → 오른쪽",
+      "section": "제스처마다 할 동작",
+      "icon": "arrows/ur.svg",
+      "default": "newTab",
+      "options": [
+        {
+          "value": "back",
+          "label": "뒤로"
+        },
+        {
+          "value": "forward",
+          "label": "앞으로"
+        },
+        {
+          "value": "top",
+          "label": "맨 위로"
+        },
+        {
+          "value": "bottom",
+          "label": "맨 아래로"
+        },
+        {
+          "value": "home",
+          "label": "홈 (새 탭 화면)"
+        },
+        {
+          "value": "reload",
+          "label": "새로고침"
+        },
+        {
+          "value": "newTab",
+          "label": "새 탭"
+        },
+        {
+          "value": "close",
+          "label": "탭 닫기"
+        },
+        {
+          "value": "reopen",
+          "label": "닫은 탭 되살리기"
+        },
+        {
+          "value": "prev",
+          "label": "이전 탭"
+        },
+        {
+          "value": "next",
+          "label": "다음 탭"
+        },
+        {
+          "value": "fullscreen",
+          "label": "전체 화면"
+        },
+        {
+          "value": "maximize",
+          "label": "창 최대화"
+        },
+        {
+          "value": "minimize",
+          "label": "창 최소화"
+        },
+        {
+          "value": "none",
+          "label": "없음"
+        }
+      ]
+    },
+    {
+      "key": "g_DL",
+      "type": "select",
+      "label": "아래 → 왼쪽",
+      "section": "제스처마다 할 동작",
+      "icon": "arrows/dl.svg",
+      "default": "none",
+      "options": [
+        {
+          "value": "back",
+          "label": "뒤로"
+        },
+        {
+          "value": "forward",
+          "label": "앞으로"
+        },
+        {
+          "value": "top",
+          "label": "맨 위로"
+        },
+        {
+          "value": "bottom",
+          "label": "맨 아래로"
+        },
+        {
+          "value": "home",
+          "label": "홈 (새 탭 화면)"
+        },
+        {
+          "value": "reload",
+          "label": "새로고침"
+        },
+        {
+          "value": "newTab",
+          "label": "새 탭"
+        },
+        {
+          "value": "close",
+          "label": "탭 닫기"
+        },
+        {
+          "value": "reopen",
+          "label": "닫은 탭 되살리기"
+        },
+        {
+          "value": "prev",
+          "label": "이전 탭"
+        },
+        {
+          "value": "next",
+          "label": "다음 탭"
+        },
+        {
+          "value": "fullscreen",
+          "label": "전체 화면"
+        },
+        {
+          "value": "maximize",
+          "label": "창 최대화"
+        },
+        {
+          "value": "minimize",
+          "label": "창 최소화"
+        },
+        {
+          "value": "none",
+          "label": "없음"
+        }
+      ]
+    },
+    {
+      "key": "g_DR",
+      "type": "select",
+      "label": "아래 → 오른쪽",
+      "section": "제스처마다 할 동작",
+      "icon": "arrows/dr.svg",
+      "default": "close",
+      "options": [
+        {
+          "value": "back",
+          "label": "뒤로"
+        },
+        {
+          "value": "forward",
+          "label": "앞으로"
+        },
+        {
+          "value": "top",
+          "label": "맨 위로"
+        },
+        {
+          "value": "bottom",
+          "label": "맨 아래로"
+        },
+        {
+          "value": "home",
+          "label": "홈 (새 탭 화면)"
+        },
+        {
+          "value": "reload",
+          "label": "새로고침"
+        },
+        {
+          "value": "newTab",
+          "label": "새 탭"
+        },
+        {
+          "value": "close",
+          "label": "탭 닫기"
+        },
+        {
+          "value": "reopen",
+          "label": "닫은 탭 되살리기"
+        },
+        {
+          "value": "prev",
+          "label": "이전 탭"
+        },
+        {
+          "value": "next",
+          "label": "다음 탭"
+        },
+        {
+          "value": "fullscreen",
+          "label": "전체 화면"
+        },
+        {
+          "value": "maximize",
+          "label": "창 최대화"
+        },
+        {
+          "value": "minimize",
+          "label": "창 최소화"
         },
         {
           "value": "none",
@@ -253,7 +865,7 @@
       "label": "왼쪽 → 위",
       "section": "제스처마다 할 동작",
       "icon": "arrows/lu.svg",
-      "default": "none",
+      "default": "fullscreen",
       "options": [
         {
           "value": "back",
@@ -264,25 +876,277 @@
           "label": "앞으로"
         },
         {
-          "value": "reload",
-          "label": "새로고침"
+          "value": "top",
+          "label": "맨 위로"
         },
         {
-          "value": "close",
-          "label": "탭 닫기"
+          "value": "bottom",
+          "label": "맨 아래로"
+        },
+        {
+          "value": "home",
+          "label": "홈 (새 탭 화면)"
+        },
+        {
+          "value": "reload",
+          "label": "새로고침"
         },
         {
           "value": "newTab",
           "label": "새 탭"
         },
         {
+          "value": "close",
+          "label": "탭 닫기"
+        },
+        {
           "value": "reopen",
           "label": "닫은 탭 되살리기"
+        },
+        {
+          "value": "prev",
+          "label": "이전 탭"
+        },
+        {
+          "value": "next",
+          "label": "다음 탭"
+        },
+        {
+          "value": "fullscreen",
+          "label": "전체 화면"
+        },
+        {
+          "value": "maximize",
+          "label": "창 최대화"
+        },
+        {
+          "value": "minimize",
+          "label": "창 최소화"
         },
         {
           "value": "none",
           "label": "없음"
         }
+      ]
+    },
+    {
+      "key": "g_LD",
+      "type": "select",
+      "label": "왼쪽 → 아래",
+      "section": "제스처마다 할 동작",
+      "icon": "arrows/ld.svg",
+      "default": "reopen",
+      "options": [
+        {
+          "value": "back",
+          "label": "뒤로"
+        },
+        {
+          "value": "forward",
+          "label": "앞으로"
+        },
+        {
+          "value": "top",
+          "label": "맨 위로"
+        },
+        {
+          "value": "bottom",
+          "label": "맨 아래로"
+        },
+        {
+          "value": "home",
+          "label": "홈 (새 탭 화면)"
+        },
+        {
+          "value": "reload",
+          "label": "새로고침"
+        },
+        {
+          "value": "newTab",
+          "label": "새 탭"
+        },
+        {
+          "value": "close",
+          "label": "탭 닫기"
+        },
+        {
+          "value": "reopen",
+          "label": "닫은 탭 되살리기"
+        },
+        {
+          "value": "prev",
+          "label": "이전 탭"
+        },
+        {
+          "value": "next",
+          "label": "다음 탭"
+        },
+        {
+          "value": "fullscreen",
+          "label": "전체 화면"
+        },
+        {
+          "value": "maximize",
+          "label": "창 최대화"
+        },
+        {
+          "value": "minimize",
+          "label": "창 최소화"
+        },
+        {
+          "value": "none",
+          "label": "없음"
+        }
+      ]
+    },
+    {
+      "key": "g_RU",
+      "type": "select",
+      "label": "오른쪽 → 위",
+      "section": "제스처마다 할 동작",
+      "icon": "arrows/ru.svg",
+      "default": "maximize",
+      "options": [
+        {
+          "value": "back",
+          "label": "뒤로"
+        },
+        {
+          "value": "forward",
+          "label": "앞으로"
+        },
+        {
+          "value": "top",
+          "label": "맨 위로"
+        },
+        {
+          "value": "bottom",
+          "label": "맨 아래로"
+        },
+        {
+          "value": "home",
+          "label": "홈 (새 탭 화면)"
+        },
+        {
+          "value": "reload",
+          "label": "새로고침"
+        },
+        {
+          "value": "newTab",
+          "label": "새 탭"
+        },
+        {
+          "value": "close",
+          "label": "탭 닫기"
+        },
+        {
+          "value": "reopen",
+          "label": "닫은 탭 되살리기"
+        },
+        {
+          "value": "prev",
+          "label": "이전 탭"
+        },
+        {
+          "value": "next",
+          "label": "다음 탭"
+        },
+        {
+          "value": "fullscreen",
+          "label": "전체 화면"
+        },
+        {
+          "value": "maximize",
+          "label": "창 최대화"
+        },
+        {
+          "value": "minimize",
+          "label": "창 최소화"
+        },
+        {
+          "value": "none",
+          "label": "없음"
+        }
+      ]
+    },
+    {
+      "key": "g_RD",
+      "type": "select",
+      "label": "오른쪽 → 아래",
+      "section": "제스처마다 할 동작",
+      "icon": "arrows/rd.svg",
+      "default": "minimize",
+      "options": [
+        {
+          "value": "back",
+          "label": "뒤로"
+        },
+        {
+          "value": "forward",
+          "label": "앞으로"
+        },
+        {
+          "value": "top",
+          "label": "맨 위로"
+        },
+        {
+          "value": "bottom",
+          "label": "맨 아래로"
+        },
+        {
+          "value": "home",
+          "label": "홈 (새 탭 화면)"
+        },
+        {
+          "value": "reload",
+          "label": "새로고침"
+        },
+        {
+          "value": "newTab",
+          "label": "새 탭"
+        },
+        {
+          "value": "close",
+          "label": "탭 닫기"
+        },
+        {
+          "value": "reopen",
+          "label": "닫은 탭 되살리기"
+        },
+        {
+          "value": "prev",
+          "label": "이전 탭"
+        },
+        {
+          "value": "next",
+          "label": "다음 탭"
+        },
+        {
+          "value": "fullscreen",
+          "label": "전체 화면"
+        },
+        {
+          "value": "maximize",
+          "label": "창 최대화"
+        },
+        {
+          "value": "minimize",
+          "label": "창 최소화"
+        },
+        {
+          "value": "none",
+          "label": "없음"
+        }
+      ]
+    },
+    {
+      "key": "excluded",
+      "type": "list",
+      "label": "제스처를 쓰지 않을 사이트",
+      "placeholder": "chess.com 처럼 주소의 사이트 이름",
+      "description": "이 사이트(와 그 아래 주소)에서는 오른쪽 버튼으로 끌어도 제스처로 읽지 않습니다. 체스판에 화살표를 긋는 사이트처럼 오른쪽 끌기를 쓰는 곳을 넣으세요.",
+      "default": [
+        "chess.com"
       ]
     },
     {
@@ -299,6 +1163,13 @@
       "key": "trail",
       "type": "toggle",
       "label": "움직인 궤적 그리기",
+      "section": "그 밖",
+      "default": true
+    },
+    {
+      "key": "feedback",
+      "type": "toggle",
+      "label": "동작 이름 보이기",
       "section": "그 밖",
       "default": true
     }

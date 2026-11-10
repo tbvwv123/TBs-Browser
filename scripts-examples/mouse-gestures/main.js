@@ -2,7 +2,29 @@
 // 맨 위 문서에서만 돈다 (틀 안에서는 브라우저에 부탁할 수 없다).
 if (window.top !== window) return;
 
-const NAMES = { back: "뒤로", forward: "앞으로", reload: "새로고침", close: "탭 닫기", newTab: "새 탭", reopen: "닫은 탭 되살리기" };
+const NAMES = {
+  back: "뒤로", forward: "앞으로", top: "맨 위로", bottom: "맨 아래로", home: "홈", reload: "새로고침", newTab: "새 탭",
+  close: "탭 닫기", reopen: "닫은 탭 되살리기", prev: "이전 탭", next: "다음 탭", fullscreen: "전체 화면", maximize: "창 최대화", minimize: "창 최소화",
+};
+
+// 제스처를 쓰지 않을 사이트: 그 사이트와 그 아래 주소 (chess.com이면 www.chess.com도)
+function excluded() {
+  const host = location.hostname.toLowerCase();
+  return (tbs.settings.excluded || []).some((s) => {
+    const h = String(s).trim().toLowerCase().replace(/^\w+:\/\//, "").split("/")[0].replace(/^\*\./, "");
+    return h && (host === h || host.endsWith("." + h));
+  });
+}
+
+// 페이지 안에서 하는 동작 (스크롤). 나머지는 브라우저에 부탁한다
+function run(a) {
+  if (a === "top" || a === "bottom") {
+    const el = document.scrollingElement || document.documentElement;
+    window.scrollTo({ top: a === "top" ? 0 : el.scrollHeight, behavior: "smooth" });
+    return;
+  }
+  tbs.tabs(a).catch((err) => console.warn("[마우스 제스처]", err));
+}
 let g = null; // 지금 긋는 제스처
 let eatMenu = false; // 제스처를 했으면 뒤따르는 오른쪽 클릭 메뉴를 막는다
 
@@ -62,7 +84,7 @@ function draw() {
     }
   }
   // 알아들은 동작 이름: 궤적 아래 가운데
-  const a = actionOf(g.dirs);
+  const a = tbs.settings.feedback !== false && actionOf(g.dirs);
   if (a) {
     const xs = g.pts.map((p) => p[0]), ys = g.pts.map((p) => p[1]);
     tag.textContent = NAMES[a];
@@ -82,7 +104,7 @@ function clear() {
 addEventListener(
   "mousedown",
   (e) => {
-    if (e.button !== 2) return;
+    if (e.button !== 2 || excluded()) return;
     g = { ax: e.clientX, ay: e.clientY, dirs: [], moved: false, pts: [[e.clientX, e.clientY]] };
   },
   true,
@@ -120,7 +142,7 @@ addEventListener(
     e.preventDefault();
     e.stopPropagation();
     const a = actionOf(done.dirs);
-    if (a) tbs.tabs(a).catch((err) => console.warn("[마우스 제스처]", err));
+    if (a) run(a);
   },
   true,
 );

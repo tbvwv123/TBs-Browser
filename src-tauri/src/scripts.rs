@@ -189,7 +189,7 @@ pub enum Permission {
     Screenshot,
     SaveFile,
     CopyText,
-    /// 메시지가 온 그 탭에서만: 뒤로·앞으로, 새로고침, 닫기, 새 탭, 되살리기, 옆 탭
+    /// 메시지가 온 그 탭에서만: 뒤로·앞으로, 새로고침, 닫기, 새 탭, 되살리기, 옆 탭, 홈. 창: 전체 화면, 최대화, 최소화
     Tabs,
     /// 스크립트별 저장 공간(storage.json)과 자기 설정 값 바꾸기
     Storage,
@@ -202,7 +202,7 @@ impl Permission {
             Permission::Screenshot => "이 탭 화면을 찍어 다운로드 폴더에 저장함",
             Permission::SaveFile => "파일을 다운로드 폴더에 저장함",
             Permission::CopyText => "클립보드에 글자를 넣음",
-            Permission::Tabs => "이 탭을 닫거나 뒤로 가게 하고, 새 탭을 열 수 있음",
+            Permission::Tabs => "이 탭을 닫거나 뒤로 가게 하고, 새 탭을 열거나 창 크기를 바꿀 수 있음",
             Permission::Storage => "자기 설정을 저장함",
         }
     }
