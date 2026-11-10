@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "popup-only",
-  "description": "콘텐츠 위에 뜨는 팝업 창(자동완성, 다운로드 목록, 메뉴, 북마크 목록)에는 필요한 명령만 허용한다.",
+  "description": "콘텐츠 위에 뜨는 팝업 창(자동완성, 다운로드, 메뉴, 북마크, 접힌 상태의 확장 패널, 설치 확인)에는 그 화면이 쓰는 명령만 허용한다.",
   "webviews": [
     "popup"
   ],
@@ -11,6 +11,20 @@
     "allow-download-open",
     "allow-download-show",
     "allow-download-cancel",
-    "allow-popup-menu-pick"
+    "allow-popup-menu-pick",
+    "allow-ext-list",
+    "allow-ext-install-confirm",
+    "allow-ext-set-enabled",
+    "allow-ext-set-pinned",
+    "allow-ext-remove",
+    "allow-ext-open-popup",
+    "allow-ext-open-options",
+    "allow-scripts-list",
+    "allow-script-set-enabled",
+    "allow-script-set-pinned",
+    "allow-scripts-reload",
+    "allow-scripts-open-folder",
+    "allow-popup-fit",
+    "allow-ext-install-pick"
   ]
 }

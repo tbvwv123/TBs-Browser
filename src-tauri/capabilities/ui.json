@@ -69,6 +69,14 @@
     "allow-apply-theme",
     "allow-update-get",
     "allow-update-install",
-    "allow-log-ui"
+    "allow-log-ui",
+    "allow-ext-list",
+    "allow-ext-install-pick",
+    "allow-ext-install-confirm",
+    "allow-ext-set-enabled",
+    "allow-ext-set-pinned",
+    "allow-ext-remove",
+    "allow-ext-open-popup",
+    "allow-ext-open-options"
   ]
 }

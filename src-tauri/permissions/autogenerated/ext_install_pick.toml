@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-ext-install-pick"
+description = "Enables the ext_install_pick command without any pre-configured scope."
+commands.allow = ["ext_install_pick"]
+
+[[permission]]
+identifier = "deny-ext-install-pick"
+description = "Denies the ext_install_pick command without any pre-configured scope."
+commands.deny = ["ext_install_pick"]

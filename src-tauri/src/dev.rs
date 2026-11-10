@@ -11,11 +11,6 @@ pub fn quiet() -> bool {
     cfg!(debug_assertions) && std::env::var_os("TBS_DEV_DESKTOP").is_some()
 }
 
-/// 시험용: 크롬 확장 허용을 켤지 (TBS_DEV_EXTENSIONS). 모든 웹뷰가 같은 값을 써야 한다 (0단계 13번).
-pub fn extensions() -> bool {
-    cfg!(debug_assertions) && std::env::var_os("TBS_DEV_EXTENSIONS").is_some()
-}
-
 /// 개발용 데스크톱이 정해져 있으면 창을 그리로 옮긴다 (보이기 전에 부른다)
 #[allow(unused_variables)]
 pub fn move_to_dev_desktop(hwnd: isize) {
@@ -177,6 +172,15 @@ fn hook_loop(app: AppHandle, dir: std::path::PathBuf) {
                 });
                 rx.recv_timeout(Duration::from_secs(20)).unwrap_or_else(|_| "timeout".into())
             }
+            // 설치 시험: "ext_install x <zip 또는 폴더>" → 고르기 창 없이 고른 것처럼 하고 설치 확인을 띄운다
+            ("ext_install", _) => match crate::extensions::prepare(&app, std::path::Path::new(&rest)) {
+                Ok(info) => {
+                    use tauri::Emitter;
+                    let _ = app.emit_to(tauri::EventTarget::webview(crate::browser::UI_WEBVIEW), "install_ready", &info);
+                    format!("prepared {}", info.name)
+                }
+                Err(e) => format!("ERR {e}"),
+            },
             // 업데이트 시험: "update" → 확인해 둔 새 버전을 내려받아 서명을 검사한다 (설치하지 않는다)
             ("update", _) => tauri::async_runtime::block_on(crate::updater::dev_download(&app)),
             // DevTools 명령을 그대로 보낸다: "cdp <label> <method> <json>"

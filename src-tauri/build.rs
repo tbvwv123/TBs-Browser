@@ -61,6 +61,15 @@ fn main() {
         "update_get",
         "update_install",
         "log_ui",
+        "ext_list",
+        "ext_install_pick",
+        "ext_install_confirm",
+        "ext_set_enabled",
+        "ext_set_pinned",
+        "ext_remove",
+        "ext_open_popup",
+        "ext_open_options",
+        "popup_fit",
     ])))
     .expect("tauri-build 실패");
 }

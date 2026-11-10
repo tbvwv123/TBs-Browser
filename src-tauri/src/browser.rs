@@ -582,7 +582,8 @@ fn content_builder(label: &str) -> WebviewBuilder<Wry> {
         .data_directory(paths::webview_dir())
         // 콘텐츠 웹뷰는 앱 내부 주소로 가지 못한다 (spec 3장 보안 경계)
         .on_navigation(|u| !input::is_app_internal(u))
-        .browser_extensions_enabled(dev::extensions())
+        // 크롬 확장 허용 (spec 6.6). 모든 웹뷰가 같은 환경 옵션이어야 한다
+        .browser_extensions_enabled(true)
         .focused(false);
     if let Some(env) = ENV.with(|e| e.borrow().clone()) {
         b = b.with_environment(env);
@@ -664,11 +665,14 @@ fn on_event(app: &AppHandle, id: TabId, ev: Event) {
             }
             return;
         }
+        // 확장을 끄거나 지우면 WebView2가 그 확장의 페이지를 자기 빈 페이지로 보낸다. 우리 새 탭 화면으로 바꾼다.
+        Event::Url(u, _) if u.starts_with("chrome-search://") => return later(app, move |a| to_blank(a, id)),
         Event::FullScreen(on) => return later(app, move |a| set_page_fullscreen(a, id, on)),
         Event::Permission { uri, kind, args } => return permissions::request(app, id, &uri, kind, args),
         Event::GotFocus => {
             // 페이지를 누르면 떠 있는 팝업(메뉴, 북마크 목록 등)을 닫는다
-            if crate::popup::is_open() {
+            // 설치·권한 확인은 바깥을 눌러도 닫지 않는다 (시안 M)
+            if crate::popup::is_open() && !crate::popup::is_showing("install") {
                 later(app, crate::popup::hide);
             }
             return;
@@ -730,10 +734,28 @@ fn on_event(app: &AppHandle, id: TabId, ev: Event) {
     }
 }
 
+/// 탭을 빈 탭(새 탭 화면)으로 되돌린다. 웹뷰는 닫는다.
+fn to_blank(app: &AppHandle, id: TabId) {
+    {
+        let b = browser(app);
+        let mut tabs = b.tabs.lock().unwrap();
+        let Some(t) = tabs.get_mut(id) else { return };
+        t.url.clear();
+        t.title.clear();
+        t.favicon = None;
+        t.loading = false;
+        t.can_go_back = false;
+        t.can_go_forward = false;
+    }
+    drop_webview(app, id);
+    layout(app);
+    emit_tab(app, id);
+}
+
 /// 이동이 끝난 페이지의 주소, 제목, 시각을 남긴다 (spec 5.4). 같은 탭에서 같은 주소가 이어지면 한 번만.
 fn record_visit(app: &AppHandle, id: TabId) {
     let Some(tab) = browser(app).tabs.lock().unwrap().get(id).cloned() else { return };
-    if tab.url.is_empty() || tab.url == "about:blank" || input::is_internal_page(&tab.url) {
+    if tab.url.is_empty() || tab.url == "about:blank" || tab.url.starts_with("chrome-extension:") || input::is_internal_page(&tab.url) {
         return;
     }
     let last = browser(app).visits.lock().unwrap().get(&id).map(|(_, u)| u.clone());

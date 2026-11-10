@@ -1,6 +1,7 @@
 /*
  * 디자인 값은 이 파일 한 곳에만 적는다 (spec 11장 3번).
- * 기준: spec 4.2(치수), 4.3(색), design/Main.dc.html(시안 F · 라이트), H(접힘), I(새 탭).
+ * 기준: spec 4.2(치수), 4.3(색), design/Main.dc.html(시안 F · 라이트), H(접힘), I(새 탭),
+ * K~P(확장 패널, 광고 차단, 설치 확인, 스크립트 설정, 찾아보기, 페이지 안) — 새 값은 design/S9-notes.md.
  * 다크 테마(시안 G, J)는 맨 아래 [data-theme="dark"]에서 같은 이름의 색만 바꾼다.
  */
 :root {
@@ -148,6 +149,77 @@
   --prompt-primary-bg: #111111;
   --prompt-primary-fg: #ffffff;
 
+  /* 확장 생태계 공통 부품 (시안 K~O, design/S9-notes.md "새 값") */
+  --tag-bg: #ebebeb; /* 종류 꼬리표, 사이트 칩 바탕 (글자는 --fg-muted) */
+  --tag-height: 16px;
+  --tag-radius: 4px;
+  --tag-font-size: 11px;
+  --tag-padding: 0 5px;
+  --chip-height: 22px;
+  --chip-radius: 6px;
+  --chip-font-size: 12px;
+  --chip-padding: 0 8px;
+  --switch-width: 28px;
+  --switch-height: 16px;
+  --switch-radius: 8px;
+  --switch-knob: 12px;
+  --switch-padding: 2px;
+  --switch-on-bg: var(--fg);
+  --switch-off-bg: #8a8a8a;
+  --switch-knob-bg: #ffffff;
+  --small-button-height: 26px;
+  --small-button-radius: 7px;
+  --small-button-font-size: 12px;
+  --small-button-padding: 0 10px;
+  --small-icon-button: 26px;
+  --small-icon: 14px;
+  --button-height: 30px;
+  --button-radius: 8px;
+  --button-font-size: 12.5px;
+  --button-padding: 0 12px;
+  --sub-font-size: 11.5px; /* 둘째 줄, 보조 글자 */
+  --letter-icon-bg: var(--fg-muted); /* 아이콘이 없는 것의 첫 글자 바탕 (글자는 --prompt-primary-fg) */
+
+  /* 확장 패널 (시안 K) */
+  --ext-panel-width: 246px;
+  --ext-panel-collapsed-width: 260px; /* 접힌 사이드바에서는 페이지 위 팝업으로 */
+  --ext-item-height: 44px;
+  --ext-item-gap: 10px;
+  --ext-item-indent: 34px; /* 펼친 줄의 버튼 줄 왼쪽 여백 (아이콘 다음 칸에 맞춤) */
+  --ext-group-label-height: 24px;
+  --ext-title-height: 28px;
+  --ext-footer-height: 34px;
+  --ext-pinned-max: 4; /* 넘으면 확장 버튼이 +N */
+  --ext-icon: 16px;
+  --ext-icon-large: 32px; /* 설치 확인, 설정 머리, 찾아보기 */
+
+  /* 광고 차단 (시안 L) */
+  --address-shield-width: 30px;
+  --adblock-popup-width: 260px;
+  --adblock-count-size: 28px;
+
+  /* 설치·권한 확인 (시안 M) */
+  --install-dialog-width: 380px;
+  --install-dialog-padding: 16px;
+  --install-dialog-gap: 12px;
+
+  /* 설정 칸 (시안 N) */
+  --select-width: 180px;
+  --select-height: 30px;
+  --number-input-width: 64px;
+  --text-input-width: 240px;
+  --field-height: 30px;
+  --page-section-title-size: 15px;
+  --page-subhead-height: 44px;
+  --page-subhead-size: 12px;
+
+  /* 찾아보기 (시안 O) */
+  --store-row-height: 72px;
+  --store-row-padding: 7px 0;
+  --store-name-size: 14px;
+  --store-search-height: 40px;
+  --store-search-radius: 20px;
+
   /* 내부 페이지 (방문 기록, 다운로드, 설정) */
   --page-padding: 40px 48px;
   --page-max-width: 760px;
@@ -193,4 +265,8 @@
 
   --prompt-primary-bg: #f4f4f4;
   --prompt-primary-fg: #111111;
+
+  --tag-bg: #3a3a3a;
+  --switch-off-bg: #7a7a7a;
+  --switch-knob-bg: #1a1a1a;
 }

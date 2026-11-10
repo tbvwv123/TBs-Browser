@@ -198,7 +198,7 @@ export const host4 = {
   fullscreenState: () => invoke<boolean>("fullscreen_state"),
 };
 
-export type PopupKind = "suggest" | "downloads" | "menu" | "bookmarks";
+export type PopupKind = "suggest" | "downloads" | "menu" | "bookmarks" | "extensions" | "install";
 
 // ───── 7단계: 접힌 사이드바, 새 탭 화면, 테마, 권한 ─────
 
@@ -332,4 +332,65 @@ export function patternMatches(pattern: string, text: string): boolean {
 /** 이 주소에 적용되는 스크립트인지 */
 export function scriptApplies(s: ScriptInfo, url: string): boolean {
   return !!url && s.matches.some((p) => patternMatches(p, url));
+}
+
+// ───── 9단계: 크롬 확장 (spec 6.6) ─────
+
+export interface ExtInfo {
+  id: string;
+  name: string;
+  version: string;
+  description: string;
+  author: string;
+  enabled: boolean;
+  pinned: boolean;
+  icon: string | null;
+  popup: string | null;
+  options: string | null;
+  matches: string[];
+  allSites: boolean;
+  sites: string[];
+  permissions: string[];
+  error: string | null;
+  /** 설치 확인에서: 이미 설치한 것을 바꾸면 그 버전 */
+  updateFrom: string | null;
+}
+
+export const host9 = {
+  extList: () => invoke<ExtInfo[]>("ext_list"),
+  extInstallPick: (folder: boolean) => invoke<ExtInfo | null>("ext_install_pick", { folder }),
+  extInstallConfirm: (accept: boolean) => invoke<void>("ext_install_confirm", { accept }),
+  extSetEnabled: (id: string, enabled: boolean) => invoke<void>("ext_set_enabled", { id, enabled }),
+  extSetPinned: (id: string, pinned: boolean) => invoke<void>("ext_set_pinned", { id, pinned }),
+  extRemove: (id: string) => invoke<void>("ext_remove", { id }),
+  extOpenPopup: (id: string, x: number, bottom: number) => invoke<void>("ext_open_popup", { id, x, bottom }),
+  extOpenOptions: (id: string) => invoke<void>("ext_open_options", { id }),
+  popupFit: (h: number) => invoke<void>("popup_fit", { h }),
+};
+
+/** 크롬 확장의 주소 패턴 ("https://*.dcinside.com/*", "<all_urls>")이 주소에 맞는지 */
+export function chromeMatches(pattern: string, url: string): boolean {
+  if (!/^https?:/.test(url)) return false;
+  if (pattern === "<all_urls>") return true;
+  const m = /^(\*|https?):\/\/([^/]*)(\/.*)?$/.exec(pattern);
+  if (!m) return false;
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return false;
+  }
+  const [, scheme, host, path = "/*"] = m;
+  if (scheme !== "*" && scheme + ":" !== u.protocol) return false;
+  if (host !== "*") {
+    if (host.startsWith("*.")) {
+      const base = host.slice(2);
+      if (u.hostname !== base && !u.hostname.endsWith("." + base)) return false;
+    } else if (u.hostname !== host) return false;
+  }
+  return patternMatches(path, u.pathname + u.search);
+}
+
+export function extApplies(e: ExtInfo, url: string): boolean {
+  return e.enabled && e.matches.some((p) => chromeMatches(p, url));
 }

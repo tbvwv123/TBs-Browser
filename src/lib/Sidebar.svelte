@@ -4,9 +4,9 @@
   import BookmarkNode from "./BookmarkNode.svelte";
   import TabRow from "./TabRow.svelte";
   import RenameInput from "./RenameInput.svelte";
-  import ScriptList from "./ScriptList.svelte";
-  import { host, type Group, type Tab } from "./api";
-  import { ui, report, moreMenuItems, openMenu, openMenuAbove, activeTab, setSidebarCollapsed } from "./store.svelte";
+  import ExtensionsPanel from "./ExtensionsPanel.svelte";
+  import { host, host9, type Group, type Tab } from "./api";
+  import { ui, report, moreMenuItems, openMenu, openMenuAbove, activeTab, setSidebarCollapsed, pinnedItems, token, type Pinned } from "./store.svelte";
   import { dropMark, consumeDragClick } from "./drag";
 
   let { onNewTab }: { onNewTab: () => void } = $props();
@@ -117,6 +117,27 @@
   // 점 3개 메뉴: 다운로드, 방문 기록, 설정 (spec 4.5)
   function moreMenu(e: MouseEvent) {
     openMenuAbove(e.currentTarget as HTMLElement, moreMenuItems());
+  }
+
+  // 고정 아이콘: 4개까지 보이고 넘는 것은 확장 버튼이 +N으로 보인다 (시안 K)
+  const pinned = $derived(pinnedItems());
+  const pinnedMax = $derived(token("--ext-pinned-max") || 4);
+  const shownPinned = $derived(pinned.slice(0, pinnedMax));
+  const hiddenPinned = $derived(pinned.length - shownPinned.length);
+  let panelEl = $state<HTMLElement>();
+
+  // 고정 아이콘을 누르면: 팝업이 있는 크롬 확장은 그 팝업, 나머지는 확장 패널
+  function openPinned(e: MouseEvent, p: Pinned) {
+    if (p.kind === "ext" && p.popup && p.enabled) {
+      const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+      host9.extOpenPopup(p.id, r.left, r.top - 6).catch(report);
+    } else ui.scriptsOpen = !ui.scriptsOpen;
+  }
+
+  // 확장 패널에서 연 확장 팝업은 패널 오른쪽, 페이지 위에 띄운다
+  function panelAnchor() {
+    const r = panelEl?.getBoundingClientRect();
+    return r ? { x: r.right + 8, bottom: r.bottom } : { x: 270, bottom: window.innerHeight - 48 };
   }
 
   const bmMark = $derived(dropMark("bookmarks-head", ""));
@@ -253,22 +274,33 @@
 
   {#if ui.scriptsOpen}
     <div class="panel-backdrop" role="presentation" onpointerdown={() => (ui.scriptsOpen = false)}></div>
-    <div class="panel" role="dialog" aria-label="사이트 스크립트">
-      <h2 class="panel-title">사이트 스크립트</h2>
-      <ScriptList compact />
+    <div class="panel" bind:this={panelEl}>
+      <ExtensionsPanel scripts={ui.scripts} extensions={ui.extensions} url={activeTab()?.url ?? ""} onError={report} popupAnchor={panelAnchor} />
     </div>
   {/if}
 
   <div class="divider" aria-hidden="true"></div>
   <div class="bottom-row">
     <!-- 고정한 사이트 스크립트 아이콘들, 그다음 확장 프로그램 버튼 (spec 4.5) -->
-    {#each ui.scripts.filter((x) => x.pinned) as sc (sc.id)}
-      <button class="ib bottom-button pinned" class:off={!sc.enabled} title={sc.name} aria-label="{sc.name} (고정된 사이트 스크립트)" onclick={() => (ui.scriptsOpen = !ui.scriptsOpen)}>
-        <span class="pin-badge">{sc.name.slice(0, 1)}</span>
+    {#each shownPinned as p (p.kind + p.id)}
+      <button class="ib bottom-button pinned" class:off={!p.enabled} title={p.name} aria-label="{p.name} (고정됨)" onclick={(e) => openPinned(e, p)}>
+        {#if p.icon}
+          <img class="pin-icon" src={p.icon} alt="" />
+        {:else}
+          <span class="pin-badge">{p.name.slice(0, 1)}</span>
+        {/if}
       </button>
     {/each}
-    <button class="ib bottom-button" aria-label="확장 프로그램" aria-expanded={ui.scriptsOpen} onclick={() => (ui.scriptsOpen = !ui.scriptsOpen)}>
+    <button
+      class="ib bottom-button"
+      class:with-count={hiddenPinned > 0}
+      class:hover={ui.scriptsOpen}
+      aria-label={hiddenPinned > 0 ? `확장 프로그램, 고정한 것 ${hiddenPinned}개 더` : "확장 프로그램"}
+      aria-expanded={ui.scriptsOpen}
+      onclick={() => (ui.scriptsOpen = !ui.scriptsOpen)}
+    >
       <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h4V7a2 2 0 1 1 4 0v1h4v4h1a2 2 0 1 1 0 4h-1v4h-4v-1a2 2 0 1 0-4 0v1H4z"></path></svg>
+      {#if hiddenPinned > 0}<span class="more-count">+{hiddenPinned}</span>{/if}
     </button>
     <span class="spacer"></span>
     <button class="ib bottom-button" aria-label={ui.update ? "더 보기, 새 버전 있음" : "더 보기"} aria-haspopup="menu" aria-expanded={!!ui.menu?.above} onclick={moreMenu}>
@@ -560,22 +592,42 @@
   .spacer {
     flex: 1;
   }
+  /* 아이콘이 없는 것은 이름 첫 글자 (시안 K의 글자 아이콘) */
   .pin-badge {
-    width: 16px;
-    height: 16px;
+    width: var(--ext-icon);
+    height: var(--ext-icon);
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 4px;
-    background: var(--fg-sidebar-button);
-    color: var(--card-bg);
-    font-size: 10px;
-    font-weight: 600;
+    border-radius: calc(var(--ext-icon) / 4);
+    background: var(--letter-icon-bg);
+    color: var(--prompt-primary-fg);
+    font-size: calc(var(--ext-icon) * 0.62);
+    font-weight: 700;
+    line-height: 1;
   }
-  .pinned.off .pin-badge {
+  .pin-icon {
+    width: var(--ext-icon);
+    height: var(--ext-icon);
+    object-fit: contain;
+  }
+  .pinned.off .pin-badge,
+  .pinned.off .pin-icon {
     opacity: 0.45;
   }
-  /* 확장 프로그램 버튼으로 여는 스크립트 목록. 페이지에 가리지 않게 사이드바 안에 위로 펼친다 */
+  .ib.hover {
+    background: var(--hover-bg);
+  }
+  .with-count {
+    width: auto;
+    gap: 4px;
+    padding: 0 8px;
+  }
+  .more-count {
+    font-size: var(--tag-font-size);
+    font-weight: 600;
+  }
+  /* 확장 패널 (시안 K): 페이지에 가리지 않게 사이드바 안에서 위로 펼친다 */
   .panel-backdrop {
     position: fixed;
     inset: 0;
@@ -585,18 +637,7 @@
     position: absolute;
     z-index: 16;
     left: 4px;
-    right: 10px;
-    bottom: calc(var(--bottom-row-height) + var(--sidebar-gap) + 6px);
-    max-height: 70vh;
-    overflow-y: auto;
-    padding: 8px;
-    background: var(--menu-bg);
-    border-radius: var(--menu-radius);
-    box-shadow: var(--menu-shadow);
-  }
-  .panel-title {
-    margin: 2px 6px 8px;
-    font-size: var(--font-size);
-    font-weight: 600;
+    width: var(--ext-panel-width);
+    bottom: calc(var(--bottom-row-height) + var(--sidebar-gap) + 5px);
   }
 </style>

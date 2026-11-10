@@ -5,7 +5,7 @@
   import { tick } from "svelte";
   import TabIcon from "./TabIcon.svelte";
   import { host, host4, type BookmarkNode, type Group, type Tab } from "./api";
-  import { ui, report, moreMenuItems, openMenu, openMenuAbove, tabLabel, tabMenu, setSidebarCollapsed, token } from "./store.svelte";
+  import { ui, report, activeTab, moreMenuItems, openMenu, openMenuAbove, tabLabel, tabMenu, setSidebarCollapsed, token } from "./store.svelte";
   import { startDrag, consumeDragClick, dropMark } from "./drag";
 
   let { onNewTab, onSearch }: { onNewTab: () => void; onSearch: () => void } = $props();
@@ -89,10 +89,15 @@
     host4.popupShow("bookmarks", { x: r.right + 4, y: r.top, w: token("--bookmarks-popup-width"), h }, { items: ui.bookmarks.items }).catch(report);
   }
 
-  // 확장 프로그램 버튼: 고정한 스크립트 아이콘도 이 안으로 들어간다 (spec 4.6). 목록은 펼친 사이드바에서 연다.
-  async function showScripts() {
-    await setSidebarCollapsed(false);
-    ui.scriptsOpen = true;
+  // 확장 프로그램 버튼: 고정 아이콘은 보이지 않고 이 안으로 들어간다 (spec 4.6, 시안 K).
+  // 패널은 페이지 위 팝업 창으로, 버튼 오른쪽에 아래 끝을 맞춰 띄운다. 높이는 팝업이 내용에 맞춘다.
+  function showExtensions(e: MouseEvent) {
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const w = token("--ext-panel-collapsed-width");
+    const h = 420;
+    const x = r.right + 4;
+    const anchor = { x: x + w + 8, bottom: r.bottom };
+    host4.popupShow("extensions", { x, y: Math.max(8, r.bottom - h), w, h }, { url: activeTab()?.url ?? "", anchor }).catch(report);
   }
 
   function moreMenu(e: MouseEvent) {
@@ -219,7 +224,7 @@
 
   <div class="short-divider bottom" aria-hidden="true"></div>
 
-  <button class="cb strong" aria-label="확장 프로그램" title="확장 프로그램" onclick={showScripts}>
+  <button class="cb strong" aria-label="확장 프로그램" title="확장 프로그램" onclick={showExtensions}>
     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h4V7a2 2 0 1 1 4 0v1h4v4h1a2 2 0 1 1 0 4h-1v4h-4v-1a2 2 0 1 0-4 0v1H4z"></path></svg>
   </button>
   <button class="cb strong" aria-label={ui.update ? "더 보기, 새 버전 있음" : "더 보기"} title="더 보기" aria-haspopup="menu" onclick={moreMenu}>

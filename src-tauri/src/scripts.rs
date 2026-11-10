@@ -135,7 +135,7 @@ pub fn pattern_matches(pattern: &str, text: &str) -> bool {
 }
 
 /// 스크립트 폴더 안의 파일만 허용한다 (상위 폴더나 절대 경로는 안 된다)
-fn inside(dir: &Path, file: &str) -> Result<PathBuf, String> {
+pub fn inside(dir: &Path, file: &str) -> Result<PathBuf, String> {
     let rel = Path::new(file);
     if file.is_empty() || rel.is_absolute() || rel.components().any(|c| !matches!(c, std::path::Component::Normal(_))) {
         return Err(format!("파일 경로 \"{file}\"은(는) 쓸 수 없습니다. 스크립트 폴더 안의 파일 이름만 적어 주세요."));

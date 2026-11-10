@@ -6,6 +6,7 @@ mod browser;
 mod dev;
 mod downloads;
 mod examples;
+mod extensions;
 mod frame;
 mod history;
 mod input;
@@ -369,11 +370,93 @@ async fn popup_pick(app: AppHandle, url: String, new_tab: Option<bool>) -> Resul
     })?
 }
 
+/// 팝업 화면이 잰 내용 높이에 팝업 창을 맞춘다 (확장 패널, 설치 확인)
+#[tauri::command]
+async fn popup_fit(app: AppHandle, h: f64) -> Result<(), String> {
+    on_main(&app, move |a| popup::fit(a, h))
+}
+
 /// 팝업으로 띄운 메뉴에서 항목을 골랐다 (접힌 사이드바). 무엇을 할지는 UI가 안다.
 #[tauri::command]
 async fn popup_menu_pick(app: AppHandle, index: usize) -> Result<(), String> {
     let _ = app.emit_to(EventTarget::webview(UI_WEBVIEW), "popup_menu_picked", index);
     on_main(&app, |a| popup::hide(a))
+}
+
+// ───────────── 9단계: 크롬 확장 (spec 6.6) ─────────────
+
+/// 시간이 걸리는 확장 작업은 WebView2 응답을 기다리므로 일꾼 스레드에서 한다
+async fn blocking<T: Send + 'static>(f: impl FnOnce() -> Result<T, String> + Send + 'static) -> Result<T, String> {
+    tauri::async_runtime::spawn_blocking(f).await.map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn ext_list(app: AppHandle) -> Vec<extensions::Info> {
+    extensions::list(&app)
+}
+
+/// "설치…": zip(`folder`가 거짓)이나 폴더를 골라 풀고 정보를 돌려준다. 고르지 않으면 null.
+/// UI가 설치 확인 팝업(시안 M)을 띄우고, 답을 `ext_install_confirm`으로 보낸다.
+#[tauri::command]
+async fn ext_install_pick(app: AppHandle, folder: bool) -> Result<Option<extensions::Info>, String> {
+    let picked = on_main(&app, move |a| {
+        let owner = a.get_window(MAIN_WINDOW).and_then(|w| w.hwnd().ok()).map(|h| h.0 as isize);
+        extensions::pick(owner, folder)
+    })?;
+    let Some(path) = picked else { return Ok(None) };
+    let app2 = app.clone();
+    let info = blocking(move || extensions::prepare(&app2, &path)).await?;
+    // 접힌 사이드바의 팝업에서 눌렀어도 설치 확인은 UI가 띄운다
+    let _ = app.emit_to(EventTarget::webview(UI_WEBVIEW), "install_ready", &info);
+    Ok(Some(info))
+}
+
+#[tauri::command]
+async fn ext_install_confirm(app: AppHandle, accept: bool) -> Result<(), String> {
+    // 창을 닫기 전에 꺼내 둔다. 닫힐 때 UI가 보내는 "취소"가 먼저 꺼내 가지 않게
+    let pending = extensions::take_pending(&app);
+    let _ = on_main(&app, |a| popup::hide(a));
+    let app2 = app.clone();
+    let r = blocking(move || extensions::confirm(&app2, pending, accept)).await;
+    if let Err(e) = &r {
+        // 팝업은 이미 닫혔으므로 UI의 알림 자리에 보인다
+        let _ = app.emit_to(EventTarget::webview(UI_WEBVIEW), "notice", e);
+    }
+    r
+}
+
+#[tauri::command]
+async fn ext_set_enabled(app: AppHandle, id: String, enabled: bool) -> Result<(), String> {
+    blocking(move || extensions::set_enabled(&app, &id, enabled)).await
+}
+
+#[tauri::command]
+async fn ext_set_pinned(app: AppHandle, id: String, pinned: bool) -> Result<(), String> {
+    blocking(move || extensions::set_pinned(&app, &id, pinned)).await
+}
+
+#[tauri::command]
+async fn ext_remove(app: AppHandle, id: String) -> Result<(), String> {
+    blocking(move || extensions::remove(&app, &id)).await
+}
+
+/// 확장의 팝업을 띄운다. (x, bottom)은 메인 창 안쪽 좌표로 팝업의 왼쪽 아래 자리
+#[tauri::command]
+async fn ext_open_popup(app: AppHandle, id: String, x: f64, bottom: f64) -> Result<(), String> {
+    let page = extensions::page_of(&app, &id, false)?;
+    let url = extensions::page_url(&id, &page)?;
+    on_main(&app, move |a| popup::show_extension(a, url, x, bottom))?
+}
+
+/// 확장의 설정 페이지를 새 탭으로 연다
+#[tauri::command]
+async fn ext_open_options(app: AppHandle, id: String) -> Result<(), String> {
+    let page = extensions::page_of(&app, &id, true)?;
+    let url = extensions::page_url(&id, &page)?;
+    on_main(&app, move |a| {
+        popup::hide(a);
+        browser::open_in_new_tab(a, url)
+    })?
 }
 
 // ───────────── 8단계: 업데이트, 오류 로그 ─────────────
@@ -498,6 +581,7 @@ fn main() {
     let built = tauri::Builder::default()
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(updater::UpdateState::default())
+        .manage(extensions::ExtStore::default())
         .manage(Browser::default())
         .manage(library::Library::default())
         .manage(SettingsStore::default())
@@ -562,7 +646,16 @@ fn main() {
             popup_menu_pick,
             update_get,
             update_install,
-            log_ui
+            log_ui,
+            ext_list,
+            ext_install_pick,
+            ext_install_confirm,
+            ext_set_enabled,
+            ext_set_pinned,
+            ext_remove,
+            ext_open_popup,
+            ext_open_options,
+            popup_fit
         ])
         .setup(|app| {
             let handle = app.handle().clone();
@@ -591,7 +684,7 @@ fn main() {
             let ui = win.add_child(
                 WebviewBuilder::new(UI_WEBVIEW, WebviewUrl::App("index.html".into()))
                     .data_directory(paths::webview_dir())
-                    .browser_extensions_enabled(dev::extensions())
+                    .browser_extensions_enabled(true)
                     .focused(!dev::quiet())
                     .auto_resize(),
                 LogicalPosition::new(0.0, 0.0),
@@ -618,6 +711,7 @@ fn main() {
                 });
             }
             popup::create(&handle, &win)?;
+            extensions::start(&handle);
             // 이전 탭 복원 (설정에서 끌 수 있다). 복원하지 않으면 새 탭 하나로 시작한다.
             let restored = if settings::get(&handle).restore_tabs {
                 match session::load() {

@@ -3,7 +3,9 @@
   // 접힌 사이드바의 메뉴와 북마크 목록 (spec 4.6).
   // 창은 투명하고, 그림자를 그릴 여백(왼쪽·오른쪽·아래 16px)을 둔다.
   import { onMount } from "svelte";
-  import { host4, on, readableUrl, fileName, formatBytes, type Suggestion, type Download, type BookmarkNode } from "./api";
+  import { host4, host5, host9, on, readableUrl, fileName, formatBytes, type Suggestion, type Download, type BookmarkNode, type ExtInfo, type ScriptInfo } from "./api";
+  import ExtensionsPanel from "./ExtensionsPanel.svelte";
+  import InstallConfirm from "./InstallConfirm.svelte";
 
   type MenuEntry = { label: string; danger: boolean; icon: string[] | null };
   type Theme = { theme: string };
@@ -11,9 +13,29 @@
     | { kind: "suggest"; data: Theme & { items: Suggestion[]; selected: number } }
     | { kind: "downloads"; data: Theme & { items: Download[] } }
     | { kind: "menu"; data: Theme & { items: MenuEntry[] } }
-    | { kind: "bookmarks"; data: Theme & { items: BookmarkNode[] } };
+    | { kind: "bookmarks"; data: Theme & { items: BookmarkNode[] } }
+    | { kind: "extensions"; data: Theme & { url: string; anchor: { x: number; bottom: number } } }
+    | { kind: "install"; data: Theme & { info: ExtInfo } };
   let view = $state<Data | null>(null);
   let error = $state("");
+  // 접힌 사이드바의 확장 패널 (시안 K): 목록은 팝업이 직접 받아 온다
+  let scripts = $state<ScriptInfo[]>([]);
+  let exts = $state<ExtInfo[]>([]);
+  // 확장 패널·설치 확인은 내용 높이에 창을 맞춘다
+  let fitted = $state<HTMLElement>();
+  $effect(() => {
+    if (!fitted) return;
+    const el = fitted;
+    const ro = new ResizeObserver(() => host9.popupFit(Math.ceil(el.getBoundingClientRect().height)).catch(() => {}));
+    ro.observe(el);
+    return () => ro.disconnect();
+  });
+
+  function loadLists() {
+    host5.scriptsList().then((l) => (scripts = l), (e) => (error = String(e)));
+    host9.extList().then((l) => (exts = l), (e) => (error = String(e)));
+  }
+
   // 북마크 목록에서 펼친 폴더 (이 목록 안에서만. 사이드바의 접힘 상태는 바꾸지 않는다)
   let open = $state<Record<string, boolean>>({});
 
@@ -25,10 +47,15 @@
       // 메인 창과 같은 테마로 그린다 (UI가 data.theme에 넣어 보낸다)
       document.documentElement.dataset.theme = d.data.theme === "dark" ? "dark" : "light";
       if (d.kind === "bookmarks" && view?.kind !== "bookmarks") open = {};
+      if (d.kind === "extensions") loadLists();
       view = d;
       error = "";
     });
-    return () => off.then((f) => f());
+    const offs = [
+      on<ScriptInfo[]>("scripts_changed", (l) => (scripts = l)),
+      on<ExtInfo[]>("extensions_changed", (l) => (exts = l)),
+    ];
+    return () => [off, ...offs].forEach((p) => p.then((f) => f()));
   });
 
   function act(p: Promise<void>) {
@@ -68,7 +95,16 @@
   {/each}
 {/snippet}
 
-{#if view}
+{#if view?.kind === "extensions"}
+  <div class="fit" bind:this={fitted}>
+    <ExtensionsPanel scripts={scripts} extensions={exts} url={view.data.url} onError={(e) => (error = String(e))} popupAnchor={() => (view as any).data.anchor} />
+    {#if error}<p class="error fit-error">{error}</p>{/if}
+  </div>
+{:else if view?.kind === "install"}
+  <div class="fit" bind:this={fitted}>
+    <InstallConfirm info={view.data.info} onAnswer={(a) => act(host9.extInstallConfirm(a))} />
+  </div>
+{:else if view}
   <div
     class="box"
     class:scroll={view.kind === "bookmarks"}
@@ -126,6 +162,20 @@
 {/if}
 
 <style>
+  /* 내용 높이에 창을 맞추는 팝업: 위에 붙이고 그림자 여백(16px)을 둔다 */
+  .fit {
+    position: absolute;
+    left: 16px;
+    right: 16px;
+    top: 0;
+  }
+  .fit-error {
+    margin: 6px 0 0;
+    padding: 6px 10px;
+    border-radius: var(--menu-radius);
+    background: var(--menu-bg);
+    box-shadow: var(--menu-shadow);
+  }
   .box {
     position: absolute;
     left: 16px;

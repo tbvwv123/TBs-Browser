@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-popup-fit"
+description = "Enables the popup_fit command without any pre-configured scope."
+commands.allow = ["popup_fit"]
+
+[[permission]]
+identifier = "deny-popup-fit"
+description = "Denies the popup_fit command without any pre-configured scope."
+commands.deny = ["popup_fit"]

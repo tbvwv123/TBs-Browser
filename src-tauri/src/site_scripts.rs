@@ -50,6 +50,7 @@ pub fn reload(app: &AppHandle) {
     let loaded = scripts::load_all(&dir());
     *store(app).0.lock().unwrap() = loaded;
     let _ = app.emit_to(EventTarget::webview(UI_WEBVIEW), "scripts_changed", list(app));
+    let _ = app.emit_to(EventTarget::webview(crate::popup::LABEL), "scripts_changed", list(app));
 }
 
 /// 처음 실행할 때 예시 스크립트 두 개를 넣는다 (spec 6.5). 폴더가 이미 있으면 건드리지 않는다.

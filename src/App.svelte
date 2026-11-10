@@ -24,12 +24,14 @@
     host5,
     host7,
     host8,
+    host9,
+    type ExtInfo,
     type PermissionRequest,
     type ScriptInfo,
     type Download,
     type Settings,
   } from "./lib/api";
-  import { ui, report, activeTab, setSidebarCollapsed, runPopupMenuItem } from "./lib/store.svelte";
+  import { ui, report, activeTab, setSidebarCollapsed, runPopupMenuItem, showInstall, cancelInstall } from "./lib/store.svelte";
 
   let maxHover = $state(false);
   let maximized = $state(false);
@@ -79,7 +81,9 @@
   });
 
   // UI를 누르면 떠 있는 팝업(메뉴, 북마크 목록, 다운로드)을 닫는다. 주소창 자동완성은 주소창이 알아서 닫는다.
+  // 설치·권한 확인은 바깥을 눌러도 닫지 않는다 (시안 M)
   function onPointerDown(e: PointerEvent) {
+    if (ui.install) return;
     if (!(e.target as Element).closest?.(".address")) host4.popupHide().catch(() => {});
   }
 
@@ -103,6 +107,10 @@
   }
 
   function onKeydown(e: KeyboardEvent) {
+    if (e.key === "Escape" && ui.install) {
+      e.preventDefault();
+      return cancelInstall();
+    }
     const name = shortcutName(e);
     if (!name) return;
     e.preventDefault();
@@ -138,6 +146,11 @@
       on<PermissionRequest[]>("permission_requests", (r) => (ui.permissions = r)),
       on<number>("popup_menu_picked", (i) => runPopupMenuItem(i)),
       on<string>("update_available", (v) => (ui.update = v)),
+      on<ExtInfo[]>("extensions_changed", (l) => (ui.extensions = l)),
+      on<ExtInfo>("install_ready", (info) => showInstall(info)),
+      on<string>("notice", (m) => (ui.error = m)),
+      // 설치 확인 창이 답 없이 닫히면(창을 옮김 등) 취소로 본다
+      on<null>("popup_closed", () => cancelInstall()),
       on<number>("update_progress", (f) => {
         if (f >= 0) ui.error = `새 버전 ${ui.update}을(를) 내려받는 중입니다 (${Math.round(f * 100)}%). 다 받으면 설치하고 다시 시작합니다.`;
       }),
@@ -158,6 +171,7 @@
     host7.sidebarGet().then((c) => (ui.sidebarCollapsed = c), report);
     host7.permissionRequests().then((r) => (ui.permissions = r), report);
     host8.updateGet().then((v) => (ui.update = v), report);
+    host9.extList().then((l) => (ui.extensions = l), report);
     host.takeNotices().then((n) => n.length && (ui.error = n.join("\n")), report);
     const ro = new ResizeObserver(sendLayout);
     ro.observe(card);

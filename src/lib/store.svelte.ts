@@ -1,5 +1,5 @@
 // UI가 그리는 상태. 원본은 호스트에 있고, 여기 값은 호스트가 보낸 것을 받아 둔 것이다.
-import { host, host4, host7, host8, displayUrl, internalTitle, type Bookmarks, type Download, type Group, type PermissionRequest, type ScriptInfo, type Settings, type Tab, type TabId } from "./api";
+import { host, host4, host7, host8, host9, displayUrl, internalTitle, type ExtInfo, type Bookmarks, type Download, type Group, type PermissionRequest, type ScriptInfo, type Settings, type Tab, type TabId } from "./api";
 
 export interface MenuItem {
   label: string;
@@ -55,7 +55,46 @@ export const ui = $state({
   permissions: [] as PermissionRequest[],
   /** 설치할 수 있는 새 버전 (spec 5.7). 있으면 점 3개 버튼에 점을 찍는다 */
   update: null as string | null,
+  /** 설치한 크롬 확장 (spec 6.6) */
+  extensions: [] as ExtInfo[],
+  /** 설치 확인을 기다리는 확장 (시안 M) */
+  install: null as ExtInfo | null,
 });
+
+/** 사이드바 맨 아래 줄에 고정한 것: 스크립트와 크롬 확장 (spec 6.4) */
+export interface Pinned {
+  kind: "script" | "ext";
+  id: string;
+  name: string;
+  icon: string | null;
+  enabled: boolean;
+  /** 크롬 확장의 팝업이 있는지 */
+  popup: boolean;
+}
+
+export function pinnedItems(): Pinned[] {
+  return [
+    ...ui.scripts.filter((s) => s.pinned).map((s): Pinned => ({ kind: "script", id: s.id, name: s.name, icon: null, enabled: s.enabled, popup: false })),
+    ...ui.extensions.filter((e) => e.pinned).map((e): Pinned => ({ kind: "ext", id: e.id, name: e.name, icon: e.icon, enabled: e.enabled, popup: !!e.popup })),
+  ];
+}
+
+/** 설치·권한 확인을 주소창 아래 가운데에 띄운다 (시안 M). 높이는 팝업이 내용에 맞춘다 */
+export function showInstall(info: ExtInfo) {
+  ui.install = info;
+  const w = token("--install-dialog-width");
+  const bar = document.querySelector(".address")?.getBoundingClientRect();
+  const cx = bar ? bar.left + bar.width / 2 : window.innerWidth / 2;
+  const y = bar ? bar.bottom + 6 : 48;
+  host4.popupShow("install", { x: Math.max(8, cx - w / 2), y, w, h: 420 }, { info }).catch(report);
+}
+
+/** 설치 확인을 취소한다 (Esc, 팝업 창이 닫힘) */
+export function cancelInstall() {
+  if (!ui.install) return;
+  ui.install = null;
+  host9.extInstallConfirm(false).catch(() => {});
+}
 
 export function report(e: unknown) {
   ui.error = String(e);
