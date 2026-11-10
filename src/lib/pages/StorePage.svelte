@@ -1,10 +1,25 @@
 <script lang="ts">
-  // 찾아보기 (spec 6.8, 시안 O). 주소: tbs://scripts
-  // 저장소 목록을 받아 보여 주고, 설치한 스크립트와 견줘 설치 / 설치됨 / 업데이트를 정한다.
+  // 확장 프로그램 관리 (spec 6.4·6.8). 두 탭:
+  // - 설치됨 (tbs://extensions): 사이트 스크립트와 크롬 확장 관리 (InstalledList)
+  // - 찾아보기 (tbs://scripts, 시안 O): 저장소 목록. 설치한 스크립트와 견줘 설치 / 설치됨 / 업데이트를 정한다.
   import "./page.css";
   import { onMount } from "svelte";
-  import { host12, newerVersion, on, type StoreEntry } from "../api";
-  import { ui, report } from "../store.svelte";
+  import InstalledList from "./InstalledList.svelte";
+  import { host, host5, host9, host12, newerVersion, on, type StoreEntry } from "../api";
+  import { ui, report, activeTab } from "../store.svelte";
+
+  let { tab }: { tab: "installed" | "store" } = $props();
+  let installChoice = $state(false);
+
+  function go(to: "installed" | "store") {
+    const t = activeTab();
+    if (t) host.navigate(t.id, to === "installed" ? "tbs://extensions" : "tbs://scripts").catch(report);
+  }
+
+  function pick(folder: boolean) {
+    installChoice = false;
+    host9.extInstallPick(folder).catch(report);
+  }
 
   let entries = $state<StoreEntry[] | null>(null);
   let failed = $state(false);
@@ -21,7 +36,7 @@
   }
 
   onMount(() => {
-    load(true);
+    load(tab === "store");
     const off = on<null>("store_done", () => (busy = null));
     return () => off.then((f) => f());
   });
@@ -67,9 +82,24 @@
 <div class="page">
   <div class="page-inner">
     <div class="head">
-      <h1 class="title">찾아보기</h1>
-      <span class="sub">스크립트 저장소</span>
+      <h1 class="title"><button class="tab" class:on={tab === "installed"} onclick={() => go("installed")}>설치됨</button></h1>
+      <h1 class="title"><button class="tab" class:on={tab === "store"} onclick={() => go("store")}>찾아보기</button></h1>
+      {#if tab === "store"}<span class="sub">스크립트 저장소</span>{/if}
+      <span class="spacer"></span>
+      {#if tab === "installed"}
+        {#if installChoice}
+          <button class="btn" onclick={() => pick(false)}>zip 파일</button>
+          <button class="btn" onclick={() => pick(true)}>압축 푼 폴더</button>
+          <button class="btn" onclick={() => (installChoice = false)}>취소</button>
+        {:else}
+          <button class="btn" onclick={() => (installChoice = true)}>크롬 확장 설치…</button>
+          <button class="btn" onclick={() => host5.scriptsOpenFolder().catch(report)}>스크립트 폴더 열기</button>
+        {/if}
+      {/if}
     </div>
+    {#if tab === "installed"}
+      <InstalledList />
+    {:else}
     <label class="search">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"></circle><path d="M20 20l-4.2-4.2"></path></svg>
       <input aria-label="스크립트 검색" placeholder="스크립트 검색" bind:value={query} />
@@ -122,6 +152,7 @@
         {/each}
       </div>
     {/if}
+    {/if}
   </div>
 </div>
 
@@ -135,6 +166,20 @@
     margin: 0;
     font-size: var(--page-title-size);
     font-weight: 600;
+  }
+  /* 두 탭: 고른 쪽은 글자색, 다른 쪽은 흐리게 */
+  .tab {
+    font: inherit;
+    color: var(--fg-muted);
+  }
+  .tab.on {
+    color: var(--fg);
+  }
+  .spacer {
+    flex: 1;
+  }
+  .head .btn {
+    align-self: center;
   }
   .sub {
     font-size: var(--button-font-size);

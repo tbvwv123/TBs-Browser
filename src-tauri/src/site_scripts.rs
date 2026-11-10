@@ -88,6 +88,41 @@ pub fn reload(app: &AppHandle) {
     let _ = app.emit_to(EventTarget::webview(crate::popup::LABEL), "scripts_changed", list(app));
 }
 
+/// 스크립트 폴더의 모양: 폴더 이름과 script.json 수정 시각 (점으로 시작하는 임시 폴더는 뺀다)
+fn folder_signature() -> Vec<(String, Option<std::time::SystemTime>)> {
+    let mut v: Vec<(String, Option<std::time::SystemTime>)> = std::fs::read_dir(dir())
+        .map(|rd| {
+            rd.filter_map(|e| e.ok())
+                .filter(|e| e.path().is_dir())
+                .map(|e| (e.file_name().to_string_lossy().into_owned(), std::fs::metadata(e.path().join("script.json")).and_then(|m| m.modified()).ok()))
+                .filter(|(n, _)| !n.starts_with('.'))
+                .collect()
+        })
+        .unwrap_or_default();
+    v.sort();
+    v
+}
+
+/// 탐색기에서 스크립트 폴더를 넣거나 지우거나 script.json을 고치면 저절로 다시 읽는다 (2초마다 본다)
+pub fn watch(app: &AppHandle) {
+    let app = app.clone();
+    std::thread::spawn(move || {
+        let mut last = folder_signature();
+        loop {
+            std::thread::sleep(std::time::Duration::from_secs(2));
+            let now = folder_signature();
+            if now != last {
+                last = now;
+                let a = app.clone();
+                let _ = app.run_on_main_thread(move || {
+                    reload(&a);
+                    crate::browser::reapply_scripts(&a, false);
+                });
+            }
+        }
+    });
+}
+
 /// 넣은 예시를 적어 두는 파일: 지운 예시를 다시 넣지 않으려는 것이다
 #[derive(serde::Serialize, serde::Deserialize, Default)]
 #[serde(default)]

@@ -237,8 +237,8 @@
         <DownloadsPage />
       {:else if active?.url === "tbs://settings"}
         <SettingsPage />
-      {:else if active?.url === "tbs://scripts"}
-        <StorePage />
+      {:else if active?.url === "tbs://scripts" || active?.url === "tbs://extensions"}
+        <StorePage tab={active.url === "tbs://scripts" ? "store" : "installed"} />
       {:else if active?.url.startsWith("tbs://scripts/")}
         <ScriptSettingsPage id={decodeURIComponent(active.url.slice("tbs://scripts/".length))} />
       {:else if active && !active.url}

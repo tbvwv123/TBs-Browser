@@ -192,8 +192,8 @@
     {#if open}
       <div class="actions">
         {#if confirmRemove === i.key}
-          <span class="confirm">확장과 저장한 데이터를 지울까요?</span>
-          <button class="small primary" disabled={busy} onclick={() => run(host9.extRemove(i.id))}>지우기</button>
+          <span class="confirm">{i.kind === "ext" ? "확장과 저장한 데이터를 지울까요?" : "휴지통으로 옮길까요?"}</span>
+          <button class="small primary" disabled={busy} onclick={() => run(i.kind === "ext" ? host9.extRemove(i.id) : host5.scriptRemove(i.id))}>지우기</button>
           <button class="small" onclick={() => (confirmRemove = null)}>취소</button>
         {:else}
           {#if i.popup}
@@ -217,11 +217,9 @@
           <button class="icon-button" class:on={i.pinned} aria-label="{i.name} 고정" aria-pressed={i.pinned} title={i.pinned ? "고정 풀기" : "사이드바에 고정"} onclick={() => pin(i)}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill={i.pinned ? "currentColor" : "none"} stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4h6l-1 6 3 3H7l3-3z"></path><path d="M12 13v7"></path></svg>
           </button>
-          {#if i.kind === "ext"}
-            <button class="icon-button" aria-label="{i.name} 지우기" title="지우기" onclick={() => (confirmRemove = i.key)}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 7h14M10 7V5h4v2M7 7l1 13h8l1-13"></path></svg>
-            </button>
-          {/if}
+          <button class="icon-button" aria-label="{i.name} 지우기" title="지우기" onclick={() => (confirmRemove = i.key)}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 7h14M10 7V5h4v2M7 7l1 13h8l1-13"></path></svg>
+          </button>
         {/if}
       </div>
     {/if}

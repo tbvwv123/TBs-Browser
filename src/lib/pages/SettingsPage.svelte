@@ -1,7 +1,6 @@
 <script lang="ts">
   // 설정 페이지 (spec 5.4). 바꾸면 바로 저장한다.
   import "./page.css";
-  import ScriptList from "../ScriptList.svelte";
   import { host4, host10, whenText, type AdblockList, siteName, PERMISSION_NAMES, type Settings, type Theme, type SearchEngine, type PermissionKind } from "../api";
   import { ui, report } from "../store.svelte";
 
@@ -190,8 +189,12 @@
       </section>
 
       <section>
-        <h2 class="page-section-title">사이트 스크립트</h2>
-        <ScriptList />
+        <h2 class="page-section-title">확장 프로그램</h2>
+        <div class="row">
+          <span class="page-ellipsis path">사이트 스크립트 {ui.scripts.length}개 · 크롬 확장 {ui.extensions.length}개</span>
+          <button class="page-button" onclick={() => host4.runShortcut("extensions").catch(report)}>관리</button>
+          <button class="page-button" onclick={() => host4.runShortcut("store").catch(report)}>찾아보기</button>
+        </div>
       </section>
     {/if}
   </div>

@@ -263,6 +263,7 @@ export function internalTitle(url: string): string | null {
       return "설정";
   }
   if (url === "tbs://scripts") return "찾아보기";
+  if (url === "tbs://extensions") return "확장 프로그램";
   if (url.startsWith("tbs://scripts/")) return "스크립트 설정";
   return null;
 }

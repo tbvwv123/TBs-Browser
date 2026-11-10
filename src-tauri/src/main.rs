@@ -814,6 +814,7 @@ fn main() {
             site_scripts::seed_examples();
             site_scripts::reload(&handle);
             store::start(&handle);
+            site_scripts::watch(&handle);
             if let Some(n) = note {
                 library::notice(&handle, n);
             }

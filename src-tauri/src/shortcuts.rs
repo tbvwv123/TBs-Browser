@@ -78,6 +78,7 @@ pub fn run(app: &AppHandle, name: &str) {
         "downloads" => browser::open_internal(app, "tbs://downloads"),
         "settings" => browser::open_internal(app, "tbs://settings"),
         "store" => browser::open_internal(app, "tbs://scripts"),
+        "extensions" => browser::open_internal(app, "tbs://extensions"),
         "fullscreen" => browser::toggle_fullscreen(app),
         "find" => browser::focus_page(app),
         "devtools" => browser::open_devtools(app),

@@ -5,7 +5,7 @@ use tauri::Url;
 use crate::settings::SearchEngine;
 
 /// 내부 페이지 (UI 웹뷰가 카드 자리에 그린다, spec 3장)
-pub const INTERNAL_PAGES: [&str; 4] = ["tbs://history", "tbs://downloads", "tbs://settings", "tbs://scripts"];
+pub const INTERNAL_PAGES: [&str; 5] = ["tbs://history", "tbs://downloads", "tbs://settings", "tbs://scripts", "tbs://extensions"];
 
 pub fn is_internal_page(url: &str) -> bool {
     url.starts_with("tbs://")

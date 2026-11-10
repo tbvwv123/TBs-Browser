@@ -6,7 +6,7 @@
   let { tab }: { tab: Tab } = $props();
 
   const internalIcon = $derived(
-    tab.url === "tbs://history" ? ICONS.history : tab.url === "tbs://downloads" ? ICONS.downloads : tab.url === "tbs://settings" || tab.url.startsWith("tbs://scripts") ? ICONS.settings : null,
+    tab.url === "tbs://history" ? ICONS.history : tab.url === "tbs://downloads" ? ICONS.downloads : tab.url === "tbs://settings" || tab.url.startsWith("tbs://scripts") || tab.url === "tbs://extensions" ? ICONS.settings : null,
   );
 </script>
 
