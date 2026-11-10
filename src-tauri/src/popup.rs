@@ -28,6 +28,7 @@ static KIND: Mutex<Option<String>> = Mutex::new(None);
 pub fn create(app: &AppHandle, main: &Window) -> tauri::Result<()> {
     let w = WebviewWindowBuilder::new(app, LABEL, WebviewUrl::App("index.html#popup".into()))
         .data_directory(paths::webview_dir())
+        .browser_extensions_enabled(crate::dev::extensions())
         .decorations(false)
         .transparent(true)
         .shadow(false)

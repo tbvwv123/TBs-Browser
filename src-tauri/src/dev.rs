@@ -11,6 +11,11 @@ pub fn quiet() -> bool {
     cfg!(debug_assertions) && std::env::var_os("TBS_DEV_DESKTOP").is_some()
 }
 
+/// 시험용: 크롬 확장 허용을 켤지 (TBS_DEV_EXTENSIONS). 모든 웹뷰가 같은 값을 써야 한다 (0단계 13번).
+pub fn extensions() -> bool {
+    cfg!(debug_assertions) && std::env::var_os("TBS_DEV_EXTENSIONS").is_some()
+}
+
 /// 개발용 데스크톱이 정해져 있으면 창을 그리로 옮긴다 (보이기 전에 부른다)
 #[allow(unused_variables)]
 pub fn move_to_dev_desktop(hwnd: isize) {
@@ -125,6 +130,52 @@ fn hook_loop(app: AppHandle, dir: std::path::PathBuf) {
                     let _ = tx.send(format!("fullscreen={}", crate::browser::is_fullscreen(&a)));
                 });
                 rx.recv_timeout(Duration::from_secs(5)).unwrap_or_else(|_| "timeout".into())
+            }
+            // 확장 시험: "ext_add ui <폴더>" → 프로필에 확장 등록, "ext_list ui" → 등록된 확장
+            ("ext_add", Some(wv)) | ("ext_list", Some(wv)) => {
+                let add = verb == "ext_add";
+                let _ = wv.with_webview(move |p| unsafe {
+                    let Ok(core) = p.controller().CoreWebView2() else { return };
+                    let Ok(profile) = core.cast::<ICoreWebView2_13>().and_then(|c| c.Profile()).and_then(|pr| pr.cast::<ICoreWebView2Profile7>()) else {
+                        let _ = tx.send("Profile7 없음".into());
+                        return;
+                    };
+                    use windows::core::{Interface, PWSTR};
+                    let name_of = |e: &ICoreWebView2BrowserExtension| {
+                        let (mut id, mut name) = (PWSTR::null(), PWSTR::null());
+                        let _ = e.Id(&mut id);
+                        let _ = e.Name(&mut name);
+                        format!("{} {}", id.to_string().unwrap_or_default(), name.to_string().unwrap_or_default())
+                    };
+                    if add {
+                        let tx2 = tx.clone();
+                        let h = ProfileAddBrowserExtensionCompletedHandler::create(Box::new(move |err, ext| {
+                            let _ = tx2.send(match ext { Some(e) if err.is_ok() => format!("added {}", name_of(&e)), _ => format!("ERR {err:?}") });
+                            Ok(())
+                        }));
+                        if let Err(e) = profile.AddBrowserExtension(&HSTRING::from(rest), &h) {
+                            let _ = tx.send(format!("ERR call {e:?}"));
+                        }
+                    } else {
+                        let tx2 = tx.clone();
+                        let h = ProfileGetBrowserExtensionsCompletedHandler::create(Box::new(move |err, list| {
+                            let mut out = vec![format!("{err:?}")];
+                            if let Some(l) = list {
+                                let mut n = 0u32;
+                                let _ = l.Count(&mut n);
+                                for i in 0..n {
+                                    if let Ok(e) = l.GetValueAtIndex(i) {
+                                        out.push(name_of(&e));
+                                    }
+                                }
+                            }
+                            let _ = tx2.send(out.join(" | "));
+                            Ok(())
+                        }));
+                        let _ = profile.GetBrowserExtensions(&h);
+                    }
+                });
+                rx.recv_timeout(Duration::from_secs(20)).unwrap_or_else(|_| "timeout".into())
             }
             // 업데이트 시험: "update" → 확인해 둔 새 버전을 내려받아 서명을 검사한다 (설치하지 않는다)
             ("update", _) => tauri::async_runtime::block_on(crate::updater::dev_download(&app)),

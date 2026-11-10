@@ -582,6 +582,7 @@ fn content_builder(label: &str) -> WebviewBuilder<Wry> {
         .data_directory(paths::webview_dir())
         // 콘텐츠 웹뷰는 앱 내부 주소로 가지 못한다 (spec 3장 보안 경계)
         .on_navigation(|u| !input::is_app_internal(u))
+        .browser_extensions_enabled(dev::extensions())
         .focused(false);
     if let Some(env) = ENV.with(|e| e.borrow().clone()) {
         b = b.with_environment(env);

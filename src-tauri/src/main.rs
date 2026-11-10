@@ -591,6 +591,7 @@ fn main() {
             let ui = win.add_child(
                 WebviewBuilder::new(UI_WEBVIEW, WebviewUrl::App("index.html".into()))
                     .data_directory(paths::webview_dir())
+                    .browser_extensions_enabled(dev::extensions())
                     .focused(!dev::quiet())
                     .auto_resize(),
                 LogicalPosition::new(0.0, 0.0),
