@@ -1,8 +1,7 @@
-//! 처음 실행할 때 사용자의 스크립트 폴더에 넣는 예시 (spec 6.5). 원본: scripts-examples/
+//! 사용자의 스크립트 폴더에 넣는 예시 (spec 6.5, 6.9). 원본: scripts-examples/
+//! 처음 실행할 때, 그리고 새 예시가 생긴 판으로 처음 실행할 때 아직 넣지 않은 예시만 넣는다 (site_scripts::seed_examples).
 
 pub const FILES: &[(&str, &[u8])] = &[
-    ("chess-pieces/script.json", include_bytes!("../../scripts-examples/chess-pieces/script.json")),
-    ("chess-pieces/style.css", include_bytes!("../../scripts-examples/chess-pieces/style.css")),
     ("chess-pieces/pieces/bb.svg", include_bytes!("../../scripts-examples/chess-pieces/pieces/bb.svg")),
     ("chess-pieces/pieces/bk.svg", include_bytes!("../../scripts-examples/chess-pieces/pieces/bk.svg")),
     ("chess-pieces/pieces/bn.svg", include_bytes!("../../scripts-examples/chess-pieces/pieces/bn.svg")),
@@ -15,6 +14,25 @@ pub const FILES: &[(&str, &[u8])] = &[
     ("chess-pieces/pieces/wp.svg", include_bytes!("../../scripts-examples/chess-pieces/pieces/wp.svg")),
     ("chess-pieces/pieces/wq.svg", include_bytes!("../../scripts-examples/chess-pieces/pieces/wq.svg")),
     ("chess-pieces/pieces/wr.svg", include_bytes!("../../scripts-examples/chess-pieces/pieces/wr.svg")),
+    ("chess-pieces/script.json", include_bytes!("../../scripts-examples/chess-pieces/script.json")),
+    ("chess-pieces/style.css", include_bytes!("../../scripts-examples/chess-pieces/style.css")),
+    ("mouse-gestures/arrows/d.svg", include_bytes!("../../scripts-examples/mouse-gestures/arrows/d.svg")),
+    ("mouse-gestures/arrows/dr.svg", include_bytes!("../../scripts-examples/mouse-gestures/arrows/dr.svg")),
+    ("mouse-gestures/arrows/l.svg", include_bytes!("../../scripts-examples/mouse-gestures/arrows/l.svg")),
+    ("mouse-gestures/arrows/lu.svg", include_bytes!("../../scripts-examples/mouse-gestures/arrows/lu.svg")),
+    ("mouse-gestures/arrows/r.svg", include_bytes!("../../scripts-examples/mouse-gestures/arrows/r.svg")),
+    ("mouse-gestures/arrows/u.svg", include_bytes!("../../scripts-examples/mouse-gestures/arrows/u.svg")),
+    ("mouse-gestures/arrows/ud.svg", include_bytes!("../../scripts-examples/mouse-gestures/arrows/ud.svg")),
+    ("mouse-gestures/icon.svg", include_bytes!("../../scripts-examples/mouse-gestures/icon.svg")),
+    ("mouse-gestures/main.js", include_bytes!("../../scripts-examples/mouse-gestures/main.js")),
+    ("mouse-gestures/script.json", include_bytes!("../../scripts-examples/mouse-gestures/script.json")),
+    ("pip/icon.svg", include_bytes!("../../scripts-examples/pip/icon.svg")),
+    ("pip/main.js", include_bytes!("../../scripts-examples/pip/main.js")),
+    ("pip/script.json", include_bytes!("../../scripts-examples/pip/script.json")),
+    ("youtube-block/icon.svg", include_bytes!("../../scripts-examples/youtube-block/icon.svg")),
+    ("youtube-block/main.js", include_bytes!("../../scripts-examples/youtube-block/main.js")),
+    ("youtube-block/script.json", include_bytes!("../../scripts-examples/youtube-block/script.json")),
+    ("youtube-block/style.css", include_bytes!("../../scripts-examples/youtube-block/style.css")),
     ("youtube-screenshot/main.js", include_bytes!("../../scripts-examples/youtube-screenshot/main.js")),
     ("youtube-screenshot/script.json", include_bytes!("../../scripts-examples/youtube-screenshot/script.json")),
     ("youtube-screenshot/style.css", include_bytes!("../../scripts-examples/youtube-screenshot/style.css")),

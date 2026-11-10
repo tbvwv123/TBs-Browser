@@ -6,6 +6,8 @@
   let { info, onAnswer }: { info: ExtInfo; onAnswer: (accept: boolean) => void } = $props();
 
   const update = $derived(info.updateFrom !== null);
+  const script = $derived(info.kind === "script");
+  const head = $derived(script ? "스크립트 켜기" : update ? "업데이트 확인" : "크롬 확장 설치");
   const meta = $derived(
     [info.author && `만든 사람 ${info.author}`, update ? `버전 ${info.updateFrom} → ${info.version}` : info.version && `버전 ${info.version}`]
       .filter(Boolean)
@@ -13,8 +15,8 @@
   );
 </script>
 
-<section class="dialog" aria-label={update ? "업데이트 확인" : "크롬 확장 설치"}>
-  <h2 class="head">{update ? "업데이트 확인" : "크롬 확장 설치"}</h2>
+<section class="dialog" aria-label={head}>
+  <h2 class="head">{head}</h2>
   <div class="who">
     {#if info.icon}
       <img class="icon" src={info.icon} alt="" />
@@ -24,7 +26,7 @@
     <div class="who-text">
       <div class="name-line">
         <span class="name">{info.name}</span>
-        <span class="tag">크롬 확장</span>
+        <span class="tag">{script ? "스크립트" : "크롬 확장"}</span>
       </div>
       {#if meta}<span class="meta">{meta}</span>{/if}
     </div>
@@ -67,12 +69,12 @@
 
   <div class="note">
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"></circle><path d="M12 11v5M12 8v.5"></path></svg>
-    <span>{info.error ?? "크롬 확장의 일부 기능은 동작하지 않을 수 있습니다."}</span>
+    <span>{info.error ?? (script ? "열린 탭은 새로고침하면 적용됩니다." : "크롬 확장의 일부 기능은 동작하지 않을 수 있습니다.")}</span>
   </div>
 
   <div class="buttons">
     <button class="button" onclick={() => onAnswer(false)}>취소</button>
-    <button class="button primary" onclick={() => onAnswer(true)}>{update ? "업데이트" : "설치"}</button>
+    <button class="button primary" onclick={() => onAnswer(true)}>{script ? "켜기" : update ? "업데이트" : "설치"}</button>
   </div>
 </section>
 

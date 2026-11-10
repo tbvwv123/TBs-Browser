@@ -476,6 +476,11 @@ fn drop_webview(app: &AppHandle, id: TabId) {
     }
 }
 
+/// 웹뷰가 있는 탭들 (메인 스레드에서만)
+pub fn cores() -> Vec<(TabId, ICoreWebView2)> {
+    HOOKS.with(|h| h.borrow().iter().map(|(id, h)| (*id, h.core.clone())).collect())
+}
+
 /// 사이트 스크립트를 켜고 끄거나 다시 불러온 뒤, 열린 탭마다 등록을 새로 한다.
 /// 열린 탭은 새로고침 뒤에 반영된다 (spec 6.2). 바꿔치기가 있으면 디스크 캐시를 비운다.
 pub fn reapply_scripts(app: &AppHandle, clear_cache: bool) {
@@ -671,11 +676,18 @@ fn on_event(app: &AppHandle, id: TabId, ev: Event) {
         Event::NewWindow { uri, args, deferral } => return open_new_window(app, id, uri, MainOnly((args, deferral))),
         Event::CloseRequested => return close_later(app, id),
         Event::Shortcut(name) => return later(app, move |a| shortcuts::run(a, name)),
+        Event::ScriptShortcut(script, sc) => {
+            return later(app, move |_| {
+                if let Some(c) = core(id) {
+                    site_scripts::dispatch(&c, &script, "shortcut", &sc);
+                }
+            })
+        }
         Event::Message(source, text) => {
             if let Some(c) = core(id) {
                 // 탭에 연 확장 페이지(설정 등)의 호환 메시지 (spec 6.6)
                 if !crate::adblock::handle_message(&c, &source, &text) && !crate::ext_compat::handle_message(app, &c, &source, &text) {
-                    site_scripts::handle_message(app, &c, &source, &text);
+                    site_scripts::handle_message(app, id, &c, &source, &text);
                 }
             }
             return;

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-script-get"
+description = "Enables the script_get command without any pre-configured scope."
+commands.allow = ["script_get"]
+
+[[permission]]
+identifier = "deny-script-get"
+description = "Denies the script_get command without any pre-configured scope."
+commands.deny = ["script_get"]

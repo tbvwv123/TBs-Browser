@@ -11,6 +11,7 @@
   import HistoryPage from "./lib/pages/HistoryPage.svelte";
   import DownloadsPage from "./lib/pages/DownloadsPage.svelte";
   import SettingsPage from "./lib/pages/SettingsPage.svelte";
+  import ScriptSettingsPage from "./lib/pages/ScriptSettingsPage.svelte";
   import {
     host,
     host4,
@@ -226,6 +227,8 @@
         <DownloadsPage />
       {:else if active?.url === "tbs://settings"}
         <SettingsPage />
+      {:else if active?.url.startsWith("tbs://scripts/")}
+        <ScriptSettingsPage id={decodeURIComponent(active.url.slice("tbs://scripts/".length))} />
       {:else if active && !active.url}
         {#key active.id}
           <NewTab bind:this={newTabPage} />

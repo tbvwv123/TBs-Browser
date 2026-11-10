@@ -22,6 +22,8 @@ pub enum Event {
     Completed(bool),
     /// 페이지에 포커스가 있을 때 누른 브라우저 단축키 (spec 5.6)
     Shortcut(&'static str),
+    /// 사이트 스크립트의 단축키 (스크립트 id, 단축키 id)
+    ScriptShortcut(String, String),
     History { back: bool, forward: bool },
     Loading(bool),
     Title(String),
@@ -226,7 +228,7 @@ pub fn hook(controller: &ICoreWebView2Controller, core: &ICoreWebView2, sink: Rc
 
         let s = sink.clone();
         controller.add_AcceleratorKeyPressed(
-            &AcceleratorKeyPressedEventHandler::create(Box::new(move |_, args| {
+            &AcceleratorKeyPressedEventHandler::create(Box::new(move |ctl, args| {
                 let Some(args) = args else { return Ok(()) };
                 let mut kind = COREWEBVIEW2_KEY_EVENT_KIND::default();
                 let mut vk = 0u32;
@@ -237,10 +239,18 @@ pub fn hook(controller: &ICoreWebView2Controller, core: &ICoreWebView2, sink: Rc
                 }
                 use windows::Win32::UI::Input::KeyboardAndMouse::GetKeyState;
                 let down = |k: i32| GetKeyState(k) < 0;
-                if let Some(name) = crate::shortcuts::name(vk, down(0x11), down(0x10), down(0x12)) {
+                let (ctrl, shift, alt) = (down(0x11), down(0x10), down(0x12));
+                if let Some(name) = crate::shortcuts::name(vk, ctrl, shift, alt) {
                     // 브라우저 단축키는 페이지로 넘기지 않는다
                     args.SetHandled(true)?;
                     s(Event::Shortcut(name));
+                } else if ctrl || alt || (0x70..=0x87).contains(&vk) {
+                    // 사이트 스크립트의 단축키: 그 스크립트가 이 페이지에 맞을 때만 (spec 6.1 shortcuts)
+                    let page = ctl.and_then(|c| c.CoreWebView2().ok()).map(|c| source(&c)).unwrap_or_default();
+                    if let Some((script, id)) = crate::site_scripts::shortcut_for(vk, ctrl, shift, alt, &page) {
+                        args.SetHandled(true)?;
+                        s(Event::ScriptShortcut(script, id));
+                    }
                 }
                 Ok(())
             })),

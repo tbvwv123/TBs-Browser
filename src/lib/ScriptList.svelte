@@ -15,6 +15,13 @@
     return s.matches.map((m) => m.replace(/^https?:\/\//, "").replace(/\/\*$/, "")).join(", ");
   }
 
+  // 켤 때 확인이 필요하면 호스트가 확인 창을 띄우고 켜지 않는다. 칸은 실제 상태로 되돌려 두고, 바뀌면 목록이 다시 그린다
+  function toggle(s: ScriptInfo, el: HTMLInputElement) {
+    const want = el.checked;
+    el.checked = s.enabled;
+    host5.scriptSetEnabled(s.id, want).catch(report);
+  }
+
   async function reload() {
     busy = true;
     ui.scripts = await host5.scriptsReload().catch((e) => {
@@ -27,12 +34,21 @@
 
 {#snippet item(s: ScriptInfo)}
   <div class="item" class:off={!s.enabled}>
-    <span class="badge" aria-hidden="true">{s.name.slice(0, 1)}</span>
+    {#if s.icon}
+      <img class="badge img" src={s.icon} alt="" />
+    {:else}
+      <span class="badge" aria-hidden="true">{s.name.slice(0, 1)}</span>
+    {/if}
     <div class="text">
       <span class="name">{s.name}</span>
       <span class="sites" title={s.matches.join("\n")}>{sites(s)}</span>
       {#if s.error}<span class="err">{s.error}</span>{/if}
     </div>
+    {#if s.settings.length}
+      <button class="pin" aria-label="{s.name} 설정" title="설정" onclick={() => host5.scriptOpenSettings(s.id).catch(report)}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"></path><circle cx="16" cy="7" r="2"></circle><circle cx="8" cy="17" r="2"></circle></svg>
+      </button>
+    {/if}
     <button
       class="pin"
       class:on={s.pinned}
@@ -44,7 +60,7 @@
       <svg width="14" height="14" viewBox="0 0 24 24" fill={s.pinned ? "currentColor" : "none"} stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M9 4h6l-1 6 4 3v2H6v-2l4-3z"></path><path d="M12 15v5" stroke-linecap="round"></path></svg>
     </button>
     <label class="switch" title={s.enabled ? "끄기" : "켜기"}>
-      <input type="checkbox" role="switch" checked={s.enabled} disabled={!!s.error && !s.enabled} aria-label="{s.name} 켜기" onchange={(e) => host5.scriptSetEnabled(s.id, (e.currentTarget as HTMLInputElement).checked).catch(report)} />
+      <input type="checkbox" role="switch" checked={s.enabled} disabled={!!s.error && !s.enabled} aria-label="{s.name} 켜기" onchange={(e) => toggle(s, e.currentTarget as HTMLInputElement)} />
       <span aria-hidden="true"></span>
     </label>
   </div>
@@ -110,6 +126,10 @@
   .item.off .name,
   .item.off .badge {
     opacity: 0.55;
+  }
+  .badge.img {
+    background: none;
+    object-fit: contain;
   }
   .badge {
     flex: none;

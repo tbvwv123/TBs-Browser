@@ -1,0 +1,16 @@
+/* 유튜브 사용자 차단: 숨긴 카드, 숨긴 자리 글자, 차단 버튼 */
+.tbs-yb-gone { display: none !important; }
+.tbs-yb-noted > :not(.tbs-yb-note) { display: none !important; }
+.tbs-yb-note {
+  display: flex; align-items: center; justify-content: center; min-height: 48px; padding: 8px 12px;
+  border-radius: 12px; background: var(--yt-spec-badge-chip-background, rgba(0, 0, 0, 0.05));
+  color: var(--yt-spec-text-secondary, #606060); font: 400 13px/1.4 "Roboto", "Noto Sans KR", sans-serif;
+}
+.tbs-yb-btn {
+  display: inline-flex; align-items: center; height: 20px; margin-inline-start: 6px; padding: 0 7px; border: 0;
+  border-radius: 6px; background: var(--yt-spec-badge-chip-background, rgba(0, 0, 0, 0.05));
+  color: var(--yt-spec-text-secondary, #606060); font: 500 11.5px/1 "Roboto", "Noto Sans KR", sans-serif;
+  cursor: pointer; vertical-align: middle; opacity: 0; transition: opacity 0.1s;
+}
+.tbs-yb-btn:hover { color: var(--yt-spec-text-primary, #0f0f0f); }
+.tbs-yb-card:hover .tbs-yb-btn, .tbs-yb-btn:focus-visible { opacity: 1; }

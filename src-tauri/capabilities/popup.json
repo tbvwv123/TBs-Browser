@@ -8,6 +8,7 @@
   "permissions": [
     "core:event:default",
     "allow-popup-pick",
+    "allow-popup-hide",
     "allow-download-open",
     "allow-download-show",
     "allow-download-cancel",
@@ -21,6 +22,8 @@
     "allow-ext-open-options",
     "allow-scripts-list",
     "allow-script-set-enabled",
+    "allow-script-open-settings",
+    "allow-script-run-action",
     "allow-script-set-pinned",
     "allow-scripts-reload",
     "allow-scripts-open-folder",

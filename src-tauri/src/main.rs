@@ -581,9 +581,21 @@ async fn scripts_list(app: AppHandle) -> Vec<scripts::ScriptInfo> {
 }
 
 /// 켜고 끈다. script.json에 저장하고, 열린 탭의 등록을 새로 한다 (새로고침 뒤 반영).
+/// 모든 사이트에서 돌거나 새 권한(tabs, storage)이 있으면, 확인(`confirmed`) 없이는 켜지 않고 켜기 확인 창을 띄운다 (spec 6.1, 6.3).
 #[tauri::command]
-async fn script_set_enabled(app: AppHandle, id: String, enabled: bool) -> Result<(), String> {
+async fn script_set_enabled(app: AppHandle, id: String, enabled: bool, confirmed: Option<bool>) -> Result<(), String> {
     let (dir, has_overrides) = script_dir(&app, &id)?;
+    if enabled && confirmed != Some(true) {
+        let prompt = {
+            let store = app.state::<site_scripts::ScriptStore>();
+            let all = store.0.lock().unwrap();
+            all.iter().find(|s| s.manifest.id == id).filter(|s| s.needs_confirm()).map(site_scripts::prompt_info)
+        };
+        if let Some(info) = prompt {
+            let _ = app.emit_to(tauri::EventTarget::webview(browser::UI_WEBVIEW), "install_ready", info);
+            return Ok(());
+        }
+    }
     scripts::set_flag(&dir, "enabled", enabled)?;
     on_main(&app, move |a| {
         site_scripts::reload(a);
@@ -597,6 +609,51 @@ async fn script_set_pinned(app: AppHandle, id: String, pinned: bool) -> Result<(
     let (dir, _) = script_dir(&app, &id)?;
     scripts::set_flag(&dir, "pinned", pinned)?;
     on_main(&app, |a| site_scripts::reload(a))
+}
+
+/// 스크립트 하나 (설정 화면, spec 6.4 시안 N)
+#[tauri::command]
+async fn script_get(app: AppHandle, id: String) -> Option<scripts::ScriptInfo> {
+    site_scripts::list(&app).into_iter().find(|s| s.id == id)
+}
+
+/// 설정 값 하나를 바꾼다. 열린 페이지에도 알린다 (tbs.onSettingsChanged)
+#[tauri::command]
+async fn script_set_value(app: AppHandle, id: String, key: String, value: serde_json::Value) -> Result<(), String> {
+    {
+        let store = app.state::<site_scripts::ScriptStore>();
+        let all = store.0.lock().unwrap();
+        let s = all.iter().find(|s| s.manifest.id == id).ok_or("스크립트를 찾지 못했습니다. \"다시 불러오기\"를 눌러 주세요.")?;
+        scripts::set_value(s, &key, &value)?;
+    }
+    on_main(&app, move |a| site_scripts::settings_changed(a, &id))
+}
+
+/// 설정 화면을 탭으로 연다
+#[tauri::command]
+async fn script_open_settings(app: AppHandle, id: String) -> Result<(), String> {
+    script_dir(&app, &id)?;
+    on_main(&app, move |a| browser::open_internal(a, &format!("tbs://scripts/{id}")))
+}
+
+/// 지금 탭에서 스크립트의 동작을 실행한다 ("이 탭에서 실행")
+#[tauri::command]
+async fn script_run_action(app: AppHandle, id: String, action: String) -> Result<(), String> {
+    on_main(&app, move |a| {
+        let tab = browser::snapshot(a).active.ok_or("열린 탭이 없습니다.")?;
+        site_scripts::run_action(a, tab, &id, &action)
+    })?
+}
+
+/// 스크립트 폴더를 휴지통으로 옮긴다 (조용히 지우지 않는다: 휴지통에서 되살릴 수 있다)
+#[tauri::command]
+async fn script_remove(app: AppHandle, id: String) -> Result<(), String> {
+    let (dir, _) = script_dir(&app, &id)?;
+    site_scripts::to_recycle_bin(&dir)?;
+    on_main(&app, |a| {
+        site_scripts::reload(a);
+        browser::reapply_scripts(a, false);
+    })
 }
 
 /// "다시 불러오기": 폴더를 다시 읽고 열린 탭에 새로 등록한다
@@ -688,6 +745,11 @@ fn main() {
             fullscreen_state,
             scripts_list,
             script_set_enabled,
+            script_get,
+            script_set_value,
+            script_open_settings,
+            script_run_action,
+            script_remove,
             script_set_pinned,
             scripts_reload,
             scripts_open_folder,

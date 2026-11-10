@@ -1,0 +1,51 @@
+{
+  "id": "youtube-block",
+  "name": "유튜브 사용자 차단",
+  "version": "1.0.0",
+  "description": "차단한 채널의 영상을 홈·검색·추천 목록에서 숨기고, 원하면 댓글도 숨깁니다. 영상 카드에 마우스를 올리면 채널 이름 옆에 \"차단\" 버튼이 생깁니다. 차단한 채널은 이 설정 화면에서 풀 수 있습니다.",
+  "author": "TB's Browser",
+  "icon": "icon.svg",
+  "matches": [
+    "https://www.youtube.com/*",
+    "https://m.youtube.com/*"
+  ],
+  "run_at": "document_end",
+  "js": [
+    "main.js"
+  ],
+  "css": [
+    "style.css"
+  ],
+  "resource_overrides": [],
+  "permissions": [
+    "storage"
+  ],
+  "settings": [
+    {
+      "key": "channels",
+      "type": "list",
+      "label": "차단한 채널",
+      "placeholder": "채널 이름 또는 @핸들",
+      "default": []
+    },
+    {
+      "key": "comments",
+      "type": "toggle",
+      "label": "댓글도 숨기기",
+      "section": "그 밖",
+      "default": false
+    },
+    {
+      "key": "note",
+      "type": "text",
+      "label": "숨긴 자리에 보일 글자",
+      "section": "그 밖",
+      "placeholder": "비우면 자리째 숨김",
+      "default": ""
+    }
+  ],
+  "shortcuts": [],
+  "actions": [],
+  "enabled": false,
+  "pinned": false
+}

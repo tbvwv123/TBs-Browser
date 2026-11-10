@@ -1,0 +1,21 @@
+{
+  "id": "pip",
+  "name": "어떤 영상이든 PiP",
+  "version": "1.0.0",
+  "description": "재생 중인 가장 큰 영상을 화면 속 화면(PiP)으로 띄웁니다. Alt+P를 누르거나, 확장 패널의 \"PiP\" 버튼을 누르거나, 영상에 마우스를 올리면 오른쪽 위에 생기는 PiP 버튼을 누릅니다. PiP를 막아 둔 사이트에서도 막는 속성을 지우고 시도합니다.",
+  "author": "TB's Browser",
+  "icon": "icon.svg",
+  "matches": ["https://*", "http://*"],
+  "run_at": "document_end",
+  "js": ["main.js"],
+  "css": [],
+  "resource_overrides": [],
+  "permissions": [],
+  "shortcuts": [{ "id": "pip", "name": "PiP 켜고 끄기", "keys": "Alt+P" }],
+  "actions": [{ "id": "pip", "name": "PiP" }],
+  "settings": [
+    { "key": "hoverButton", "type": "toggle", "label": "영상 위에 PiP 버튼 보이기", "default": true }
+  ],
+  "enabled": false,
+  "pinned": false
+}

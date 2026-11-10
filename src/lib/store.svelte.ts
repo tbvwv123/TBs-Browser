@@ -74,7 +74,7 @@ export interface Pinned {
 
 export function pinnedItems(): Pinned[] {
   return [
-    ...ui.scripts.filter((s) => s.pinned).map((s): Pinned => ({ kind: "script", id: s.id, name: s.name, icon: null, enabled: s.enabled, popup: false })),
+    ...ui.scripts.filter((s) => s.pinned).map((s): Pinned => ({ kind: "script", id: s.id, name: s.name, icon: s.icon, enabled: s.enabled, popup: false })),
     ...ui.extensions.filter((e) => e.pinned).map((e): Pinned => ({ kind: "ext", id: e.id, name: e.name, icon: e.icon, enabled: e.enabled, popup: !!e.popup })),
   ];
 }
@@ -92,8 +92,10 @@ export function showInstall(info: ExtInfo) {
 /** 설치 확인을 취소한다 (Esc, 팝업 창이 닫힘) */
 export function cancelInstall() {
   if (!ui.install) return;
+  const script = ui.install.kind === "script";
   ui.install = null;
-  host9.extInstallConfirm(false).catch(() => {});
+  if (script) host4.popupHide().catch(() => {});
+  else host9.extInstallConfirm(false).catch(() => {});
 }
 
 export function report(e: unknown) {
@@ -165,6 +167,11 @@ export function runPopupMenuItem(index: number) {
 
 /** 탭 줄에 보일 이름 */
 export function tabLabel(tab: Tab): string {
+  if (tab.url.startsWith("tbs://scripts/")) {
+    const id = decodeURIComponent(tab.url.slice("tbs://scripts/".length));
+    const s = ui.scripts.find((x) => x.id === id);
+    if (s) return `${s.name} 설정`;
+  }
   return internalTitle(tab.url) ?? (tab.title || (tab.url ? displayUrl(tab.url) : "새 탭"));
 }
 

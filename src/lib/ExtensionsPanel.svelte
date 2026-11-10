@@ -32,6 +32,8 @@
     applies: boolean;
     popup: boolean;
     options: boolean;
+    /** 사이트 스크립트의 "이 탭에서 실행" 버튼 (spec 6.1 actions) */
+    actions: { id: string; name: string }[];
   };
 
   let expanded = $state<string | null>(null);
@@ -46,7 +48,7 @@
   }
 
   function scriptHosts(s: ScriptInfo): { hosts: string[]; all: boolean } {
-    const all = s.matches.some((m) => m === "*" || /^\*:\/\/\*\/?\*?$/.test(m) || m === "https://*" || m === "<all_urls>");
+    const all = s.matches.some((m) => m === "*" || /^(\*|https?):\/\/\*\/?\*?$/.test(m) || m === "<all_urls>");
     const hosts: string[] = [];
     for (const m of s.matches) {
       const h = m.replace(/^\w+:\/\//, "").split("/")[0].replace(/^\*\./, "").replace(/^www\./, "");
@@ -63,14 +65,15 @@
         kind: "script",
         id: s.id,
         name: s.name,
-        icon: null,
+        icon: s.icon,
         sites: siteLabel(hosts, all),
         enabled: s.enabled,
         pinned: s.pinned,
         error: s.error,
         applies: s.enabled && scriptApplies(s, url),
         popup: false,
-        options: false,
+        options: s.settings.length > 0,
+        actions: s.actions,
       };
     }),
     ...extensions.map((e): Item => ({
@@ -86,6 +89,7 @@
       applies: extApplies(e, url),
       popup: !!e.popup,
       options: !!e.options,
+      actions: [],
     })),
   ]);
   const here = $derived(items.filter((i) => i.applies));
@@ -183,10 +187,15 @@
           {#if i.popup}
             <button class="small primary" disabled={!i.enabled} onclick={() => openPopup(i)}>팝업 열기</button>
           {/if}
+          {#if i.applies && !i.error}
+            {#each i.actions as a (a.id)}
+              <button class="small primary" title="이 탭에서 실행" onclick={() => run(host5.scriptRunAction(i.id, a.id))}>{a.name}</button>
+            {/each}
+          {/if}
           {#if i.error}<span class="err-text">{i.error}</span>{/if}
           <span class="spacer"></span>
           {#if i.options}
-            <button class="icon-button" aria-label="{i.name} 설정" title="설정" onclick={() => run(host9.extOpenOptions(i.id))}>
+            <button class="icon-button" aria-label="{i.name} 설정" title="설정" onclick={() => run(i.kind === "script" ? host5.scriptOpenSettings(i.id) : host9.extOpenOptions(i.id))}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"></path><circle cx="16" cy="7" r="2"></circle><circle cx="8" cy="17" r="2"></circle></svg>
             </button>
           {/if}

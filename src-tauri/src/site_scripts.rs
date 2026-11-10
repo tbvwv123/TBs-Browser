@@ -17,10 +17,30 @@ use windows::core::{Interface, HSTRING, PWSTR};
 use crate::{
     browser::UI_WEBVIEW,
     downloads, native, paths,
-    scripts::{self, Permission, Script, ScriptInfo},
+    scripts::{self, Keys, Permission, Script, ScriptInfo},
     settings,
     state::TabId,
 };
+
+/// 단축키 표: 콘텐츠 웹뷰의 키 처리기(메인 스레드)가 바로 찾을 수 있게 따로 둔다
+struct KeyEntry {
+    keys: Keys,
+    script: String,
+    shortcut: String,
+    matches: Vec<String>,
+}
+
+static KEYS: Mutex<Vec<KeyEntry>> = Mutex::new(Vec::new());
+
+/// 페이지에서 눌린 키가 켜진 스크립트의 단축키이면 (스크립트 id, 단축키 id)
+pub fn shortcut_for(vk: u32, ctrl: bool, shift: bool, alt: bool, page: &str) -> Option<(String, String)> {
+    let k = Keys { vk, ctrl, shift, alt };
+    KEYS.lock()
+        .unwrap()
+        .iter()
+        .find(|e| e.keys == k && e.matches.iter().any(|p| scripts::pattern_matches(p, page)))
+        .map(|e| (e.script.clone(), e.shortcut.clone()))
+}
 
 /// 읽어 들인 스크립트 목록
 #[derive(Default)]
@@ -48,23 +68,61 @@ pub fn list(app: &AppHandle) -> Vec<ScriptInfo> {
 /// 폴더를 다시 읽는다
 pub fn reload(app: &AppHandle) {
     let loaded = scripts::load_all(&dir());
+    *KEYS.lock().unwrap() = loaded
+        .iter()
+        .filter(|s| s.active())
+        .flat_map(|s| s.keys.iter().map(|(k, id)| KeyEntry { keys: *k, script: s.manifest.id.clone(), shortcut: id.clone(), matches: s.manifest.matches.clone() }))
+        .collect();
     *store(app).0.lock().unwrap() = loaded;
     let _ = app.emit_to(EventTarget::webview(UI_WEBVIEW), "scripts_changed", list(app));
     let _ = app.emit_to(EventTarget::webview(crate::popup::LABEL), "scripts_changed", list(app));
 }
 
-/// 처음 실행할 때 예시 스크립트 두 개를 넣는다 (spec 6.5). 폴더가 이미 있으면 건드리지 않는다.
+/// 넣은 예시를 적어 두는 파일: 지운 예시를 다시 넣지 않으려는 것이다
+#[derive(serde::Serialize, serde::Deserialize, Default)]
+#[serde(default)]
+struct SeededFile {
+    version: u32,
+    examples: Vec<String>,
+}
+
+/// 예시 스크립트를 넣는다 (spec 6.5, 6.9). 전에 넣은 적 없는 예시만 넣고, 같은 이름의 폴더가 있으면 건드리지 않는다.
+/// 11단계 전에 설치한 사람은 처음 두 예시를 이미 넣은 것으로 본다.
 pub fn seed_examples() {
     let root = dir();
-    if root.exists() {
-        return;
-    }
-    for (path, bytes) in crate::examples::FILES {
-        let p = root.join(path);
-        if let Some(parent) = p.parent() {
-            let _ = std::fs::create_dir_all(parent);
+    let record = root.join(".examples.json");
+    let mut seeded = match crate::storage::load::<SeededFile>(&record).ok().flatten() {
+        Some(f) => f,
+        None if root.exists() => SeededFile { version: 1, examples: vec!["chess-pieces".into(), "youtube-screenshot".into()] },
+        None => SeededFile::default(),
+    };
+    let ids: Vec<&str> = {
+        let mut v: Vec<&str> = crate::examples::FILES.iter().filter_map(|(p, _)| p.split('/').next()).collect();
+        v.dedup();
+        v
+    };
+    let mut changed = false;
+    for id in ids {
+        if seeded.examples.iter().any(|e| e == id) {
+            continue;
         }
-        let _ = std::fs::write(p, bytes);
+        seeded.examples.push(id.to_string());
+        changed = true;
+        if root.join(id).exists() {
+            continue;
+        }
+        for (path, bytes) in crate::examples::FILES.iter().filter(|(p, _)| p.split('/').next() == Some(id)) {
+            let p = root.join(path);
+            if let Some(parent) = p.parent() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+            let _ = std::fs::write(p, bytes);
+        }
+    }
+    if changed {
+        seeded.version = 1;
+        let _ = std::fs::create_dir_all(&root);
+        let _ = crate::storage::save(&record, &seeded);
     }
 }
 
@@ -179,8 +237,46 @@ pub fn clear_disk_cache(core: &ICoreWebView2) {
 
 // ───────────── 페이지의 부탁 (spec 6.3) ─────────────
 
+/// 스크립트에 단축키나 "이 탭에서 실행"을 알린다. 사용자 동작으로 부르므로 PiP·전체 화면 같은 것도 된다.
+/// 메인 스레드에서, WebView2 이벤트 처리기 밖에서 부른다.
+pub fn dispatch(core: &ICoreWebView2, script: &str, kind: &str, name: &str) {
+    let expr = format!(
+        "(()=>{{const m=window.__tbs_site_script_events;const f=m&&m.get({});if(f)f({},{});return !!f}})()",
+        serde_json::to_string(script).unwrap(),
+        serde_json::to_string(kind).unwrap(),
+        serde_json::to_string(name).unwrap()
+    );
+    let params = json!({ "expression": expr, "userGesture": true, "returnByValue": true }).to_string();
+    unsafe {
+        let h = CallDevToolsProtocolMethodCompletedHandler::create(Box::new(|_, _| Ok(())));
+        let _ = core.CallDevToolsProtocolMethod(&HSTRING::from("Runtime.evaluate"), &HSTRING::from(params), &h);
+    }
+}
+
+/// 설정 값이 바뀌었음을 열린 탭에 알린다 (tbs.onSettingsChanged)
+pub fn broadcast_settings(app: &AppHandle, script: &str) {
+    let values = store(app).0.lock().unwrap().iter().find(|s| s.manifest.id == script).map(|s| Value::Object(s.values.clone()));
+    let Some(values) = values else { return };
+    let msg = json!({ "__tbs_site_script_event": { "script": script, "kind": "settings", "data": values } }).to_string();
+    for (_, c) in crate::browser::cores() {
+        let _ = unsafe { c.PostWebMessageAsJson(&HSTRING::from(msg.as_str())) };
+    }
+}
+
+/// "이 탭에서 실행": 켜져 있고 이 탭 주소에 맞는 스크립트의 그 동작만
+pub fn run_action(app: &AppHandle, tab: TabId, script: &str, action: &str) -> Result<(), String> {
+    let url = crate::browser::snapshot(app).tabs.into_iter().find(|t| t.id == tab).map(|t| t.url).unwrap_or_default();
+    let ok = store(app).0.lock().unwrap().iter().any(|s| s.manifest.id == script && s.active() && s.applies_to(&url) && s.manifest.actions.iter().any(|a| a.id == action));
+    if !ok {
+        return Err("이 탭에서는 그 동작을 실행할 수 없습니다. 스크립트가 켜져 있고 이 사이트에 맞는지 확인해 주세요.".into());
+    }
+    let core = crate::browser::cores().into_iter().find(|(id, _)| *id == tab).map(|(_, c)| c).ok_or("탭이 아직 열리지 않았습니다. 탭을 한 번 눌러 연 뒤 다시 해 주세요.")?;
+    dispatch(&core, script, "action", action);
+    Ok(())
+}
+
 /// 페이지에서 온 메시지가 사이트 스크립트의 부탁이면 처리하고 답한다. 아니면 무시한다.
-pub fn handle_message(app: &AppHandle, core: &ICoreWebView2, source: &str, text: &str) {
+pub fn handle_message(app: &AppHandle, tab: TabId, core: &ICoreWebView2, source: &str, text: &str) {
     let Ok(v) = serde_json::from_str::<Value>(text) else { return };
     let Some(req) = v.get("__tbs_site_script") else { return };
     let script_id = req.get("script").and_then(Value::as_str).unwrap_or("").to_string();
@@ -198,19 +294,66 @@ pub fn handle_message(app: &AppHandle, core: &ICoreWebView2, source: &str, text:
         "screenshot" => Permission::Screenshot,
         "saveFile" => Permission::SaveFile,
         "copyText" => Permission::CopyText,
-        _ => return reply(Err(format!("\"{kind}\"은(는) 부탁할 수 없는 일입니다. screenshot, saveFile, copyText만 됩니다."))),
+        "tabs" => Permission::Tabs,
+        "storage" | "setSetting" => Permission::Storage,
+        _ => return reply(Err(format!("\"{kind}\"은(는) 부탁할 수 없는 일입니다. screenshot, saveFile, copyText, tabs, storage, setSetting만 됩니다."))),
     };
     // 그 권한을 가진 켜진 스크립트이고, 보낸 페이지 주소가 그 스크립트의 matches에 맞아야 한다
     let allowed = {
         let s = store(app);
         let all = s.0.lock().unwrap();
-        all.iter().find(|s| s.manifest.id == script_id).map(|s| (s.active() && s.manifest.permissions.contains(&perm) && s.applies_to(source), s.info().name))
+        all.iter()
+            .find(|s| s.manifest.id == script_id)
+            .map(|s| (s.active() && s.manifest.permissions.contains(&perm) && s.applies_to(source), s.info().name, s.dir.clone()))
     };
-    let Some((true, name)) = allowed else {
+    let Some((true, name, dir)) = allowed else {
         crate::log::warn(format!("사이트 스크립트 부탁을 거절함: script={script_id} kind={kind} page={source}"));
         return reply(Err("이 페이지에서는 그 일을 부탁할 수 없습니다. 스크립트의 permissions와 matches를 확인해 주세요.".into()));
     };
     match perm {
+        Permission::Tabs => {
+            let action = data.get("action").and_then(Value::as_str).unwrap_or("").to_string();
+            if !["back", "forward", "reload", "close", "newTab", "reopen", "next", "prev"].contains(&action.as_str()) {
+                return reply(Err(format!("탭에 \"{action}\"은(는) 할 수 없습니다. back, forward, reload, close, newTab, reopen, next, prev만 됩니다.")));
+            }
+            reply(Ok(Value::Null));
+            // 이 처리기 안에서 탭을 닫거나 만들지 않는다
+            crate::browser::later(app, move |a| match action.as_str() {
+                "back" => crate::browser::go_back(tab),
+                "forward" => crate::browser::go_forward(tab),
+                "reload" => crate::browser::reload(a, tab),
+                "close" => crate::browser::close(a, tab),
+                "newTab" => crate::shortcuts::run(a, "new_tab"),
+                "reopen" => crate::shortcuts::run(a, "reopen_tab"),
+                "next" => crate::browser::activate_neighbor(a, true),
+                _ => crate::browser::activate_neighbor(a, false),
+            });
+        }
+        Permission::Storage if kind == "setSetting" => {
+            let key = data.get("key").and_then(Value::as_str).unwrap_or("").to_string();
+            let value = data.get("value").cloned().unwrap_or(Value::Null);
+            let result = {
+                let s = store(app);
+                let all = s.0.lock().unwrap();
+                match all.iter().find(|s| s.manifest.id == script_id) {
+                    Some(sc) => scripts::set_value(sc, &key, &value),
+                    None => Err("스크립트를 찾지 못했습니다.".into()),
+                }
+            };
+            match result {
+                Ok(values) => {
+                    reply(Ok(Value::Object(values)));
+                    let id = script_id.clone();
+                    crate::browser::later(app, move |a| settings_changed(a, &id));
+                }
+                Err(e) => reply(Err(e)),
+            }
+        }
+        Permission::Storage => {
+            let op = data.get("op").and_then(Value::as_str).unwrap_or("");
+            let key = data.get("key").and_then(Value::as_str);
+            reply(scripts::storage_op(&dir, op, key, data.get("value")));
+        }
         Permission::CopyText => {
             let text = data.get("text").and_then(Value::as_str).unwrap_or("");
             reply(copy_text(text).map(|_| Value::Null));
@@ -246,6 +389,67 @@ pub fn handle_message(app: &AppHandle, core: &ICoreWebView2, source: &str, text:
             }));
         }
     }
+}
+
+/// 켜기 확인 창(시안 M)에 보낼 것. 크롬 확장 설치 확인과 같은 모양에 kind만 다르다
+pub fn prompt_info(s: &Script) -> Value {
+    let m = &s.manifest;
+    let mut sites: Vec<String> = Vec::new();
+    for p in &m.matches {
+        let h = p.split_once("://").map(|(_, r)| r).unwrap_or(p).split('/').next().unwrap_or("");
+        let h = h.trim_start_matches("*.").trim_start_matches("www.").to_string();
+        if !h.is_empty() && h != "*" && !sites.contains(&h) {
+            sites.push(h);
+        }
+    }
+    json!({
+        "kind": "script",
+        "id": m.id, "name": s.info().name, "version": m.version, "description": m.description, "author": m.author,
+        "enabled": m.enabled, "pinned": m.pinned, "icon": s.icon, "popup": null, "options": null,
+        "matches": m.matches, "allSites": s.all_sites(), "sites": sites,
+        "permissions": m.permissions.iter().map(|p| p.sentence()).collect::<Vec<_>>(),
+        "error": null, "updateFrom": null,
+    })
+}
+
+/// 폴더를 휴지통으로 옮긴다
+pub fn to_recycle_bin(dir: &std::path::Path) -> Result<(), String> {
+    use windows::Win32::UI::Shell::*;
+    // 스크립트 폴더 안의 폴더만
+    if dir.parent() != Some(self::dir().as_path()) {
+        return Err("스크립트 폴더 밖의 것은 지우지 않습니다.".into());
+    }
+    let from: Vec<u16> = dir.as_os_str().encode_wide_nul2();
+    let mut op = SHFILEOPSTRUCTW {
+        wFunc: FO_DELETE,
+        pFrom: windows::core::PCWSTR(from.as_ptr()),
+        fFlags: (FOF_ALLOWUNDO.0 | FOF_NOCONFIRMATION.0 | FOF_SILENT.0 | FOF_NOERRORUI.0) as u16,
+        ..Default::default()
+    };
+    let r = unsafe { SHFileOperationW(&mut op) };
+    if r != 0 || op.fAnyOperationsAborted.as_bool() {
+        return Err(format!("스크립트 폴더를 휴지통으로 옮기지 못했습니다(코드 {r}). 폴더를 연 프로그램을 닫고 다시 해 주세요."));
+    }
+    Ok(())
+}
+
+/// 경로를 두 번 0으로 끝나는 UTF-16으로 (SHFileOperation의 pFrom)
+trait WideNul2 {
+    fn encode_wide_nul2(&self) -> Vec<u16>;
+}
+
+impl WideNul2 for std::ffi::OsStr {
+    fn encode_wide_nul2(&self) -> Vec<u16> {
+        use std::os::windows::ffi::OsStrExt;
+        self.encode_wide().chain([0, 0]).collect()
+    }
+}
+
+/// 설정 값이 바뀐 뒤: 다시 읽고, 열린 탭의 등록을 새로 하고(새로 연 페이지용), 열린 페이지에 알린다
+pub fn settings_changed(app: &AppHandle, script: &str) {
+    reload(app);
+    crate::browser::reapply_scripts(app, false);
+    broadcast_settings(app, script);
 }
 
 /// 파일 이름에 붙일 지금 시각 (예: 2026-11-10 09-40-12)

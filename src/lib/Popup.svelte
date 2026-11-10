@@ -73,6 +73,12 @@
   function act(p: Promise<void>) {
     p.catch((e) => (error = String(e)));
   }
+
+  /** 스크립트 켜기 확인의 답: 켜기를 누르면 확인한 것으로 켠다 */
+  async function answerScript(id: string, accept: boolean) {
+    if (accept) await host5.scriptSetEnabled(id, true, true);
+    await host4.popupHide();
+  }
 </script>
 
 {#snippet bookmarkRows(items: BookmarkNode[], depth: number)}
@@ -120,7 +126,7 @@
   </div>
 {:else if view?.kind === "install"}
   <div class="fit" bind:this={fitted}>
-    <InstallConfirm info={view.data.info} onAnswer={(a) => act(host9.extInstallConfirm(a))} />
+    <InstallConfirm info={view.data.info} onAnswer={(a) => act(view?.kind === "install" && view.data.info.kind === "script" ? answerScript(view.data.info.id, a) : host9.extInstallConfirm(a))} />
   </div>
 {:else if view}
   <div

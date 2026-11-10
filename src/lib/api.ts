@@ -262,6 +262,7 @@ export function internalTitle(url: string): string | null {
     case "tbs://settings":
       return "설정";
   }
+  if (url.startsWith("tbs://scripts/")) return "스크립트 설정";
   return null;
 }
 
@@ -315,11 +316,42 @@ export interface ScriptInfo {
   pinned: boolean;
   permissions: string[];
   error: string | null;
+  /** 아이콘 (데이터 URL). 없으면 이름 첫 글자 */
+  icon: string | null;
+  version: string;
+  description: string;
+  author: string;
+  settings: SettingField[];
+  values: Record<string, unknown>;
+  shortcuts: { id: string; name: string; keys: string }[];
+  actions: { id: string; name: string }[];
+}
+
+/** 스크립트의 설정 칸 (spec 6.1 settings, 시안 N) */
+export interface SettingField {
+  key: string;
+  type: "toggle" | "number" | "text" | "list" | "select";
+  label: string;
+  description: string;
+  default: unknown;
+  options: { value: string; label: string }[];
+  section: string;
+  unit: string;
+  min: number | null;
+  max: number | null;
+  icon: string | null;
+  placeholder: string;
 }
 
 export const host5 = {
   scriptsList: () => invoke<ScriptInfo[]>("scripts_list"),
-  scriptSetEnabled: (id: string, enabled: boolean) => invoke<void>("script_set_enabled", { id, enabled }),
+  /** 모든 사이트이거나 새 권한이 있으면, confirmed 없이는 켜지 않고 켜기 확인 창을 띄운다 */
+  scriptSetEnabled: (id: string, enabled: boolean, confirmed = false) => invoke<void>("script_set_enabled", { id, enabled, confirmed }),
+  scriptGet: (id: string) => invoke<ScriptInfo | null>("script_get", { id }),
+  scriptSetValue: (id: string, key: string, value: unknown) => invoke<void>("script_set_value", { id, key, value }),
+  scriptOpenSettings: (id: string) => invoke<void>("script_open_settings", { id }),
+  scriptRunAction: (id: string, action: string) => invoke<void>("script_run_action", { id, action }),
+  scriptRemove: (id: string) => invoke<void>("script_remove", { id }),
   scriptSetPinned: (id: string, pinned: boolean) => invoke<void>("script_set_pinned", { id, pinned }),
   scriptsReload: () => invoke<ScriptInfo[]>("scripts_reload"),
   scriptsOpenFolder: () => invoke<void>("scripts_open_folder"),
@@ -356,6 +388,8 @@ export interface ExtInfo {
   error: string | null;
   /** 설치 확인에서: 이미 설치한 것을 바꾸면 그 버전 */
   updateFrom: string | null;
+  /** 사이트 스크립트를 켤 때의 확인이면 "script" */
+  kind?: "script";
 }
 
 export const host9 = {

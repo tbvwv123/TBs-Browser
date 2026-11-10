@@ -1,0 +1,310 @@
+{
+  "id": "mouse-gestures",
+  "name": "마우스 제스처",
+  "version": "1.0.0",
+  "description": "오른쪽 버튼을 누른 채 끌면 궤적을 그리고, 방향에 따라 뒤로·앞으로·새로고침·탭 닫기·새 탭·닫은 탭 되살리기를 합니다. 끌지 않고 누르면 원래 오른쪽 클릭 메뉴가 뜹니다.",
+  "author": "TB's Browser",
+  "icon": "icon.svg",
+  "matches": [
+    "https://*",
+    "http://*"
+  ],
+  "run_at": "document_start",
+  "js": [
+    "main.js"
+  ],
+  "css": [],
+  "resource_overrides": [],
+  "permissions": [
+    "tabs"
+  ],
+  "settings": [
+    {
+      "key": "g_L",
+      "type": "select",
+      "label": "왼쪽",
+      "section": "제스처마다 할 동작",
+      "icon": "arrows/l.svg",
+      "default": "back",
+      "options": [
+        {
+          "value": "back",
+          "label": "뒤로"
+        },
+        {
+          "value": "forward",
+          "label": "앞으로"
+        },
+        {
+          "value": "reload",
+          "label": "새로고침"
+        },
+        {
+          "value": "close",
+          "label": "탭 닫기"
+        },
+        {
+          "value": "newTab",
+          "label": "새 탭"
+        },
+        {
+          "value": "reopen",
+          "label": "닫은 탭 되살리기"
+        },
+        {
+          "value": "none",
+          "label": "없음"
+        }
+      ]
+    },
+    {
+      "key": "g_R",
+      "type": "select",
+      "label": "오른쪽",
+      "section": "제스처마다 할 동작",
+      "icon": "arrows/r.svg",
+      "default": "forward",
+      "options": [
+        {
+          "value": "back",
+          "label": "뒤로"
+        },
+        {
+          "value": "forward",
+          "label": "앞으로"
+        },
+        {
+          "value": "reload",
+          "label": "새로고침"
+        },
+        {
+          "value": "close",
+          "label": "탭 닫기"
+        },
+        {
+          "value": "newTab",
+          "label": "새 탭"
+        },
+        {
+          "value": "reopen",
+          "label": "닫은 탭 되살리기"
+        },
+        {
+          "value": "none",
+          "label": "없음"
+        }
+      ]
+    },
+    {
+      "key": "g_U",
+      "type": "select",
+      "label": "위",
+      "section": "제스처마다 할 동작",
+      "icon": "arrows/u.svg",
+      "default": "reopen",
+      "options": [
+        {
+          "value": "back",
+          "label": "뒤로"
+        },
+        {
+          "value": "forward",
+          "label": "앞으로"
+        },
+        {
+          "value": "reload",
+          "label": "새로고침"
+        },
+        {
+          "value": "close",
+          "label": "탭 닫기"
+        },
+        {
+          "value": "newTab",
+          "label": "새 탭"
+        },
+        {
+          "value": "reopen",
+          "label": "닫은 탭 되살리기"
+        },
+        {
+          "value": "none",
+          "label": "없음"
+        }
+      ]
+    },
+    {
+      "key": "g_D",
+      "type": "select",
+      "label": "아래",
+      "section": "제스처마다 할 동작",
+      "icon": "arrows/d.svg",
+      "default": "newTab",
+      "options": [
+        {
+          "value": "back",
+          "label": "뒤로"
+        },
+        {
+          "value": "forward",
+          "label": "앞으로"
+        },
+        {
+          "value": "reload",
+          "label": "새로고침"
+        },
+        {
+          "value": "close",
+          "label": "탭 닫기"
+        },
+        {
+          "value": "newTab",
+          "label": "새 탭"
+        },
+        {
+          "value": "reopen",
+          "label": "닫은 탭 되살리기"
+        },
+        {
+          "value": "none",
+          "label": "없음"
+        }
+      ]
+    },
+    {
+      "key": "g_DR",
+      "type": "select",
+      "label": "아래 → 오른쪽",
+      "section": "제스처마다 할 동작",
+      "icon": "arrows/dr.svg",
+      "default": "close",
+      "options": [
+        {
+          "value": "back",
+          "label": "뒤로"
+        },
+        {
+          "value": "forward",
+          "label": "앞으로"
+        },
+        {
+          "value": "reload",
+          "label": "새로고침"
+        },
+        {
+          "value": "close",
+          "label": "탭 닫기"
+        },
+        {
+          "value": "newTab",
+          "label": "새 탭"
+        },
+        {
+          "value": "reopen",
+          "label": "닫은 탭 되살리기"
+        },
+        {
+          "value": "none",
+          "label": "없음"
+        }
+      ]
+    },
+    {
+      "key": "g_UD",
+      "type": "select",
+      "label": "위 → 아래",
+      "section": "제스처마다 할 동작",
+      "icon": "arrows/ud.svg",
+      "default": "reload",
+      "options": [
+        {
+          "value": "back",
+          "label": "뒤로"
+        },
+        {
+          "value": "forward",
+          "label": "앞으로"
+        },
+        {
+          "value": "reload",
+          "label": "새로고침"
+        },
+        {
+          "value": "close",
+          "label": "탭 닫기"
+        },
+        {
+          "value": "newTab",
+          "label": "새 탭"
+        },
+        {
+          "value": "reopen",
+          "label": "닫은 탭 되살리기"
+        },
+        {
+          "value": "none",
+          "label": "없음"
+        }
+      ]
+    },
+    {
+      "key": "g_LU",
+      "type": "select",
+      "label": "왼쪽 → 위",
+      "section": "제스처마다 할 동작",
+      "icon": "arrows/lu.svg",
+      "default": "none",
+      "options": [
+        {
+          "value": "back",
+          "label": "뒤로"
+        },
+        {
+          "value": "forward",
+          "label": "앞으로"
+        },
+        {
+          "value": "reload",
+          "label": "새로고침"
+        },
+        {
+          "value": "close",
+          "label": "탭 닫기"
+        },
+        {
+          "value": "newTab",
+          "label": "새 탭"
+        },
+        {
+          "value": "reopen",
+          "label": "닫은 탭 되살리기"
+        },
+        {
+          "value": "none",
+          "label": "없음"
+        }
+      ]
+    },
+    {
+      "key": "minDistance",
+      "type": "number",
+      "label": "최소 이동 거리",
+      "section": "그 밖",
+      "unit": "px",
+      "default": 30,
+      "min": 5,
+      "max": 200
+    },
+    {
+      "key": "trail",
+      "type": "toggle",
+      "label": "움직인 궤적 그리기",
+      "section": "그 밖",
+      "default": true
+    }
+  ],
+  "shortcuts": [],
+  "actions": [],
+  "enabled": false,
+  "pinned": false
+}

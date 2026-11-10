@@ -212,6 +212,9 @@
   --page-section-title-size: 15px;
   --page-subhead-height: 44px;
   --page-subhead-size: 12px;
+  --list-input-height: 34px; /* 글자 목록의 더하기 칸 */
+  --field-icon-box: 28px; /* 설정 줄 앞의 작은 아이콘 칸 (아이콘 16px) */
+  --field-icon-radius: 7px;
 
   /* 찾아보기 (시안 O) */
   --store-row-height: 72px;
