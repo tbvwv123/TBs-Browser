@@ -119,7 +119,7 @@
 <div class="page">
   <div class="page-inner">
     {#if !script}
-      <p class="page-empty">스크립트를 찾지 못했습니다. 지웠거나 폴더 이름이 바뀌었을 수 있습니다.</p>
+      <p class="page-empty">스크립트를 찾지 못했습니다.</p>
     {:else}
       <div class="head">
         {#if script.icon}
@@ -189,9 +189,6 @@
           </div>
         {/if}
       {/each}
-      {#if !script.settings.length}
-        <p class="page-muted">이 스크립트에는 설정할 것이 없습니다.</p>
-      {/if}
     {/if}
   </div>
 </div>

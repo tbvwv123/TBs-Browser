@@ -208,7 +208,7 @@
               class="cb count"
               class:active={block.tabs.some((t) => t.id === ui.activeId)}
               aria-label="{g.title} 그룹 펼치기, 탭 {block.tabs.length}개"
-              title="{g.title} (누르면 펼침)"
+              title={g.title}
               onclick={() => host.groupSetCollapsed(g.id, false).catch(report)}
             >
               {block.tabs.length}

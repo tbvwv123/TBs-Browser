@@ -72,7 +72,7 @@
     <button class="action" disabled={busy} onclick={reload}>다시 불러오기</button>
   </div>
   {#if !ui.scripts.length}
-    <p class="hint">스크립트가 없습니다. 스크립트 폴더에 폴더를 넣고 "다시 불러오기"를 누르세요.</p>
+    <p class="hint">스크립트가 없습니다.</p>
   {/if}
   {#if here.length}
     <h3 class="title">이 탭에 적용 중</h3>
@@ -82,7 +82,6 @@
     {#if here.length}<h3 class="title">다른 스크립트</h3>{/if}
     {#each others as s (s.id)}{@render item(s)}{/each}
   {/if}
-  <p class="hint">켜고 끈 결과는 열린 탭을 새로고침하면 반영됩니다.</p>
 </div>
 
 <style>

@@ -83,6 +83,15 @@
 
   // UI를 누르면 떠 있는 팝업(메뉴, 북마크 목록, 다운로드)을 닫는다. 주소창 자동완성은 주소창이 알아서 닫는다.
   // 설치·권한 확인은 바깥을 눌러도 닫지 않는다 (시안 M)
+  // 마우스 옆 버튼: 새 탭 화면·내부 페이지·사이드바 위에서도 지금 탭을 뒤로·앞으로
+  function onSideButton(e: MouseEvent) {
+    if (e.button !== 3 && e.button !== 4) return;
+    e.preventDefault();
+    const tab = activeTab();
+    if (!tab) return;
+    (e.button === 3 ? host.goBack(tab.id) : host.goForward(tab.id)).catch(report);
+  }
+
   function onPointerDown(e: PointerEvent) {
     if (ui.install) return;
     if (!(e.target as Element).closest?.(".address")) host4.popupHide().catch(() => {});
@@ -186,7 +195,7 @@
   });
 </script>
 
-<svelte:window onkeydown={onKeydown} onpointerdowncapture={onPointerDown} />
+<svelte:window onkeydown={onKeydown} onpointerdowncapture={onPointerDown} onmousedown={(e) => (e.button === 3 || e.button === 4) && e.preventDefault()} onmouseup={onSideButton} />
 
 <div class="window" class:dragging={ui.drag} class:fullscreen={ui.fullscreen}>
   {#if ui.fullscreen}

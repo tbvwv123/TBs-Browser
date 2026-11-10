@@ -225,7 +225,7 @@
   {/if}
   {#each others as i (i.key)}{@render row(i)}{/each}
   {#if !items.length}
-    <p class="hint">설치한 것이 없습니다. "설치…"로 크롬 확장을, 스크립트 폴더에 사이트 스크립트를 넣으세요.</p>
+    <p class="hint">설치한 것이 없습니다.</p>
   {/if}
   <div class="divider" aria-hidden="true"></div>
   <div class="footer">

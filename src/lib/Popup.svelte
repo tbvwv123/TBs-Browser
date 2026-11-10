@@ -150,7 +150,7 @@
       {#if view.data.items.length}
         {@render bookmarkRows(view.data.items, 0)}
       {:else}
-        <p class="empty">북마크가 없습니다. 주소창의 별 버튼으로 추가하세요.</p>
+        <p class="empty">북마크가 없습니다.</p>
       {/if}
     {:else if view.kind === "suggest"}
       {#each view.data.items as s, i}

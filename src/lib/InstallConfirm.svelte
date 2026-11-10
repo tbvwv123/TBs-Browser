@@ -49,7 +49,7 @@
         {#each info.sites as s}<span class="chip">{s}</span>{/each}
       </div>
     {:else}
-      <span class="meta">페이지에 끼어드는 사이트가 없습니다.</span>
+      <span class="meta">없음</span>
     {/if}
   </div>
 
@@ -69,7 +69,7 @@
 
   <div class="note">
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"></circle><path d="M12 11v5M12 8v.5"></path></svg>
-    <span>{info.error ?? (script ? "열린 탭은 새로고침하면 적용됩니다." : "크롬 확장의 일부 기능은 동작하지 않을 수 있습니다.")}</span>
+    <span>{info.error ?? (script ? "새로고침해야 적용됩니다" : "크롬 확장의 일부 기능은 동작하지 않을 수 있습니다.")}</span>
   </div>
 
   <div class="buttons">

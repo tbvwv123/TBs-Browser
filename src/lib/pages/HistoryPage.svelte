@@ -78,7 +78,7 @@
     </div>
 
     {#if !visits.length}
-      <p class="page-empty">{query ? `"${query}"이(가) 들어간 기록이 없습니다.` : "아직 방문 기록이 없습니다."}</p>
+      <p class="page-empty">{query ? `"${query}"이(가) 들어간 기록이 없습니다.` : "방문 기록이 없습니다."}</p>
     {/if}
 
     <div class="page-list">

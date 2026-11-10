@@ -116,7 +116,6 @@
 
       <section>
         <h2 class="page-section-title">메모리 관리</h2>
-        <p class="page-muted">안 보는 탭을 재우고 버리는 기준입니다. 소리를 내는 탭, 다운로드 중인 탭, "항상 유지" 탭은 빼고 적용합니다.</p>
         <div class="numbers">
           <label>안 본 지 <input class="page-field num" type="number" min="1" max="1440" value={s.memory.suspendAfterMinutes}
               onchange={(e) => save((x) => (x.memory.suspendAfterMinutes = num((e.currentTarget as HTMLInputElement).value, 1, 1440, 5)))} /> 분 뒤 재우기</label>
@@ -139,7 +138,7 @@
             {/each}
           </ul>
         {:else}
-          <p class="page-muted">사이트가 카메라, 마이크, 알림, 위치를 요청하면 허용·차단을 묻고 여기에 기억합니다.</p>
+          <p class="page-muted">기억한 권한이 없습니다.</p>
         {/if}
       </section>
 
@@ -186,7 +185,7 @@
             {/each}
           </div>
         {:else}
-          <p class="page-muted">주소창의 방패 버튼으로 사이트마다 끌 수 있습니다.</p>
+          <p class="page-muted">없음</p>
         {/if}
       </section>
 

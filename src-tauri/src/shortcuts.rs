@@ -65,12 +65,12 @@ pub fn run(app: &AppHandle, name: &str) {
         }
         "back" => {
             if let Some(id) = active {
-                browser::go_back(id);
+                browser::go_back(app, id);
             }
         }
         "forward" => {
             if let Some(id) = active {
-                browser::go_forward(id);
+                browser::go_forward(app, id);
             }
         }
         "bookmark" => browser::bookmark_active(app),

@@ -17,7 +17,7 @@
       <h1 class="page-title">다운로드</h1>
     </div>
     {#if !ui.downloads.length}
-      <p class="page-empty">아직 받은 파일이 없습니다.</p>
+      <p class="page-empty">받은 파일이 없습니다.</p>
     {/if}
     <div class="page-list">
       {#each ui.downloads as d (d.id)}

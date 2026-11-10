@@ -189,7 +189,7 @@
               <BookmarkNode {node} parent={null} depth={0} />
             {/each}
             {#if ui.bookmarks.items.length === 0}
-              <p class="hint">별 버튼이나 + 버튼으로 북마크를 추가하세요.</p>
+              <p class="hint">북마크가 없습니다.</p>
             {/if}
           </div>
         {/if}

@@ -88,12 +88,12 @@ async fn navigate(app: AppHandle, id: TabId, input: String) -> Result<(), String
 
 #[tauri::command]
 async fn go_back(app: AppHandle, id: TabId) -> Result<(), String> {
-    on_main(&app, move |_| browser::go_back(id))
+    on_main(&app, move |a| browser::go_back(a, id))
 }
 
 #[tauri::command]
 async fn go_forward(app: AppHandle, id: TabId) -> Result<(), String> {
-    on_main(&app, move |_| browser::go_forward(id))
+    on_main(&app, move |a| browser::go_forward(a, id))
 }
 
 #[tauri::command]

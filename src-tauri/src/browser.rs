@@ -44,11 +44,33 @@ pub struct Browser {
     last_active: Mutex<Option<TabId>>,
 }
 
+/// 마우스 옆 버튼으로 뒤로·앞으로. WebView2는 이 버튼을 처리하지 않는다.
+/// 맨 위 문서는 브라우저에 알리고(홈 화면 처리 때문), 틀 안에서는 탭 기록을 바로 움직인다.
+const NAV_BUTTONS_JS: &str = r#"(() => {
+  if (window.__tbsNavButtons) return;
+  window.__tbsNavButtons = true;
+  const side = (e) => e.button === 3 || e.button === 4;
+  addEventListener("mousedown", (e) => { if (side(e)) e.preventDefault(); }, true);
+  addEventListener("mouseup", (e) => {
+    if (!side(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const dir = e.button === 3 ? "back" : "forward";
+    if (window.top === window && window.chrome && chrome.webview) chrome.webview.postMessage(JSON.stringify({ __tbs_nav: dir }));
+    else if (dir === "back") history.back();
+    else history.forward();
+  }, true);
+})();"#;
+
 thread_local! {
     /// 모든 웹뷰가 같이 쓰는 WebView2 환경 (UI 웹뷰의 것). 메인 스레드에만 있다.
     static ENV: RefCell<Option<ICoreWebView2Environment>> = const { RefCell::new(None) };
     /// 탭마다 건 네이티브 처리기.
     static HOOKS: RefCell<HashMap<TabId, native::Hooks>> = RefCell::new(HashMap::new());
+    /// "홈"으로 새 탭 화면을 덮은 탭: 그 밑의 페이지(웹뷰와 기록은 그대로 둔다). 뒤로 가면 되돌린다
+    static HOME: RefCell<HashMap<TabId, Tab>> = RefCell::new(HashMap::new());
+    /// 홈에서 뒤로 와서, 앞으로 가면 다시 홈이 되는 탭
+    static HOME_AHEAD: RefCell<std::collections::HashSet<TabId>> = RefCell::new(std::collections::HashSet::new());
     /// 탭 웹뷰를 담은 자식 창(WRY_WEBVIEW). 둥근 모서리 영역을 여기에 건다.
     static CONTAINERS: RefCell<HashMap<TabId, isize>> = RefCell::new(HashMap::new());
     /// 탭마다 건 다운로드 처리기 토큰
@@ -326,6 +348,15 @@ fn apply_fullscreen(app: &AppHandle) {
     if let Some(w) = app.get_window(MAIN_WINDOW) {
         if w.is_fullscreen().unwrap_or(false) != on {
             let _ = w.set_fullscreen(on);
+            // 창을 tao를 거치지 않고 보였으면(개발용 데스크톱) tao가 창 모양을 다시 쓰면서 보임 표시를 뺀다. 활성화 없이 다시 보인다
+            if let Ok(h) = w.hwnd() {
+                use windows::Win32::UI::WindowsAndMessaging::{IsWindowVisible, ShowWindow, SW_SHOWNA};
+                unsafe {
+                    if !IsWindowVisible(windows::Win32::Foundation::HWND(h.0)).as_bool() {
+                        let _ = ShowWindow(windows::Win32::Foundation::HWND(h.0), SW_SHOWNA);
+                    }
+                }
+            }
         }
     }
     crate::popup::hide(app);
@@ -409,6 +440,8 @@ pub fn edit_tabs(app: &AppHandle, f: impl FnOnce(&mut Tabs)) {
 
 pub fn navigate(app: &AppHandle, id: TabId, url: Url) -> Result<(), String> {
     let internal = input::is_internal_page(url.as_str());
+    HOME.with(|h| h.borrow_mut().remove(&id));
+    HOME_AHEAD.with(|h| h.borrow_mut().remove(&id));
     {
         let b = browser(app);
         let mut tabs = b.tabs.lock().unwrap();
@@ -495,16 +528,76 @@ pub fn reapply_scripts(app: &AppHandle, clear_cache: bool) {
     }
 }
 
-pub fn go_back(id: TabId) {
+pub fn go_back(app: &AppHandle, id: TabId) {
+    if let Some(under) = HOME.with(|h| h.borrow_mut().remove(&id)) {
+        // 홈에서 뒤로: 밑의 페이지를 되돌린다
+        HOME_AHEAD.with(|h| h.borrow_mut().insert(id));
+        let url = under.url.clone();
+        {
+            let b = browser(app);
+            let mut tabs = b.tabs.lock().unwrap();
+            if let Some(t) = tabs.get_mut(id) {
+                t.url = under.url;
+                t.title = under.title;
+                t.favicon = under.favicon;
+                t.can_go_back = under.can_go_back;
+                t.can_go_forward = true;
+            }
+        }
+        // 메모리 관리로 웹뷰를 버렸으면 다시 연다
+        if webview(app, id).is_none() {
+            if let Ok(u) = Url::parse(&url) {
+                let _ = navigate(app, id, u);
+            }
+        }
+        layout(app);
+        emit_tab(app, id);
+        return;
+    }
     if let Some(c) = core(id) {
         let _ = unsafe { c.GoBack() };
     }
 }
 
-pub fn go_forward(id: TabId) {
+pub fn go_forward(app: &AppHandle, id: TabId) {
+    let can = browser(app).tabs.lock().unwrap().get(id).is_some_and(|t| t.can_go_forward);
+    if HOME_AHEAD.with(|h| h.borrow().contains(&id)) && !core(id).is_some_and(|c| native::history(&c).1) && can {
+        return go_home(app, id);
+    }
     if let Some(c) = core(id) {
         let _ = unsafe { c.GoForward() };
     }
+}
+
+/// "홈": 이 탭에 새 탭 화면을 띄운다. 웹 페이지의 웹뷰와 기록은 남겨 두어 뒤로 가면 돌아온다
+pub fn go_home(app: &AppHandle, id: TabId) {
+    let Some(tab) = browser(app).tabs.lock().unwrap().get(id).cloned() else { return };
+    if tab.url.is_empty() || HOME.with(|h| h.borrow().contains_key(&id)) {
+        return;
+    }
+    if webview(app, id).is_none() || input::is_internal_page(&tab.url) {
+        return to_blank(app, id);
+    }
+    HOME_AHEAD.with(|h| h.borrow_mut().remove(&id));
+    HOME.with(|h| h.borrow_mut().insert(id, tab));
+    {
+        let b = browser(app);
+        let mut tabs = b.tabs.lock().unwrap();
+        if let Some(t) = tabs.get_mut(id) {
+            t.url.clear();
+            t.title.clear();
+            t.favicon = None;
+            t.loading = false;
+            t.can_go_back = true;
+            t.can_go_forward = false;
+        }
+    }
+    layout(app);
+    emit_tab(app, id);
+}
+
+fn at_home(id: TabId) -> bool {
+    HOME.with(|h| h.borrow().contains_key(&id))
 }
 
 pub fn stop(id: TabId) {
@@ -579,7 +672,7 @@ fn layout(app: &AppHandle) {
     }
     for id in ids {
         if let Some(wv) = webview(app, id) {
-            if Some(id) == active {
+            if Some(id) == active && !at_home(id) {
                 let _ = wv.set_position(LogicalPosition::new(x, y));
                 let _ = wv.set_size(LogicalSize::new(w, h));
                 clip_corners(app, id);
@@ -643,6 +736,10 @@ fn create_webview(app: &AppHandle, id: TabId, url: Option<Url>, focus: bool, aft
         if let Some(t) = downloads::attach(&app2, &core, id) {
             DOWNLOAD_TOKENS.with(|d| d.borrow_mut().insert(id, t));
         }
+        // 마우스 옆 버튼(뒤로·앞으로)
+        unsafe {
+            let _ = core.AddScriptToExecuteOnDocumentCreated(&windows::core::HSTRING::from(NAV_BUTTONS_JS), None);
+        }
         // 광고 차단 (spec 6.7): 요청 처리기와 화면 숨기기 스크립트
         if let Some(t) = crate::adblock::attach(&app2, &core, p.environment(), id) {
             ADBLOCK_TOKENS.with(|d| d.borrow_mut().insert(id, t));
@@ -683,6 +780,10 @@ fn on_event(app: &AppHandle, id: TabId, ev: Event) {
                 }
             })
         }
+        Event::Message(_, text) if text.starts_with("{\"__tbs_nav\":") => {
+            let back = text.contains("\"back\"");
+            return later(app, move |a| if back { go_back(a, id) } else { go_forward(a, id) });
+        }
         Event::Message(source, text) => {
             if let Some(c) = core(id) {
                 // 탭에 연 확장 페이지(설정 등)의 호환 메시지 (spec 6.6)
@@ -719,6 +820,12 @@ fn on_event(app: &AppHandle, id: TabId, ev: Event) {
             return;
         }
         _ => {}
+    }
+    if at_home(id) && matches!(ev, Event::Url(..) | Event::History { .. } | Event::Loading(_) | Event::Title(_) | Event::Favicon(_)) {
+        return;
+    }
+    if let Event::Url(_, false) = ev {
+        HOME_AHEAD.with(|h| h.borrow_mut().remove(&id));
     }
     let mut same_document = false;
     let mut new_document = false;

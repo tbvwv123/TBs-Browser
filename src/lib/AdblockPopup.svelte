@@ -35,7 +35,7 @@
     <span>광고 차단</span>
   </div>
   {#if !status.enabled}
-    <p class="text">광고 차단이 꺼져 있습니다. 설정에서 켤 수 있습니다.</p>
+    <p class="text">광고 차단이 꺼져 있습니다.</p>
   {:else if siteOn && !changed}
     <div class="count">
       <span class="num">{status.count}</span>
@@ -43,7 +43,7 @@
       <span class="sub">이 페이지에서</span>
     </div>
   {:else if siteOn}
-    <p class="text">이 사이트에서 다시 광고를 막습니다.</p>
+    <p class="text">이 사이트에서 광고를 막습니다.</p>
   {:else}
     <p class="text">이 사이트에서는 광고를 막지 않습니다.</p>
   {/if}

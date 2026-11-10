@@ -22,7 +22,7 @@
 
 <div class="prompt" role="alertdialog" aria-label="권한 요청">
   <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z"></path></svg>
-  <p class="text"><strong>{siteName(request.site)}</strong>에서 <strong>{what}</strong> 권한을 요청합니다. 고른 답은 이 사이트에 기억합니다.</p>
+  <p class="text"><strong>{siteName(request.site)}</strong>에서 <strong>{what}</strong> 권한을 요청합니다.</p>
   <button class="button" onclick={() => answer(false, true)}>차단</button>
   <button class="button primary" onclick={() => answer(true, true)}>허용</button>
   <button class="close" aria-label="닫기 (이번만 차단)" title="닫기 (이번만 차단)" onclick={() => answer(false, false)}>

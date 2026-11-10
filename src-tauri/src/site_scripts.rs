@@ -320,8 +320,8 @@ pub fn handle_message(app: &AppHandle, tab: TabId, core: &ICoreWebView2, source:
             reply(Ok(Value::Null));
             // 이 처리기 안에서 탭을 닫거나 만들지 않는다
             crate::browser::later(app, move |a| match action.as_str() {
-                "back" => crate::browser::go_back(tab),
-                "forward" => crate::browser::go_forward(tab),
+                "back" => crate::browser::go_back(a, tab),
+                "forward" => crate::browser::go_forward(a, tab),
                 "reload" => crate::browser::reload(a, tab),
                 "close" => crate::browser::close(a, tab),
                 "newTab" => crate::shortcuts::run(a, "new_tab"),
@@ -329,7 +329,7 @@ pub fn handle_message(app: &AppHandle, tab: TabId, core: &ICoreWebView2, source:
                 "next" => crate::browser::activate_neighbor(a, true),
                 "prev" => crate::browser::activate_neighbor(a, false),
                 // 홈: 이 탭을 새 탭 화면으로
-                "home" => crate::browser::to_blank(a, tab),
+                "home" => crate::browser::go_home(a, tab),
                 "fullscreen" => crate::browser::toggle_fullscreen(a),
                 _ => {
                     if let Some(w) = a.get_window(crate::browser::MAIN_WINDOW) {
