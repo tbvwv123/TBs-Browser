@@ -55,6 +55,8 @@ thread_local! {
     static DOWNLOAD_TOKENS: RefCell<HashMap<TabId, i64>> = RefCell::new(HashMap::new());
     /// 탭마다 건 리소스 바꿔치기 처리기 토큰 (spec 6.2)
     static OVERRIDE_TOKENS: RefCell<HashMap<TabId, i64>> = RefCell::new(HashMap::new());
+    /// 탭마다 건 광고 차단 처리기 토큰 (spec 6.7)
+    static ADBLOCK_TOKENS: RefCell<HashMap<TabId, i64>> = RefCell::new(HashMap::new());
     /// 확장 페이지를 다시 연 때 (같은 탭에서 되풀이하지 않게)
     static RELOADED: RefCell<HashMap<TabId, std::time::Instant>> = RefCell::new(HashMap::new());
 }
@@ -458,6 +460,9 @@ fn drop_webview(app: &AppHandle, id: TabId) {
         if let Some(t) = DOWNLOAD_TOKENS.with(|d| d.borrow_mut().remove(&id)) {
             downloads::detach(&h.core, t);
         }
+        if let Some(t) = ADBLOCK_TOKENS.with(|d| d.borrow_mut().remove(&id)) {
+            crate::adblock::detach(&h.core, id, t);
+        }
         if let Some(t) = OVERRIDE_TOKENS.with(|d| d.borrow_mut().remove(&id)) {
             site_scripts::detach_overrides(&h.core, t);
         }
@@ -633,6 +638,10 @@ fn create_webview(app: &AppHandle, id: TabId, url: Option<Url>, focus: bool, aft
         if let Some(t) = downloads::attach(&app2, &core, id) {
             DOWNLOAD_TOKENS.with(|d| d.borrow_mut().insert(id, t));
         }
+        // 광고 차단 (spec 6.7): 요청 처리기와 화면 숨기기 스크립트
+        if let Some(t) = crate::adblock::attach(&app2, &core, p.environment(), id) {
+            ADBLOCK_TOKENS.with(|d| d.borrow_mut().insert(id, t));
+        }
         if let Some(t) = site_scripts::attach_overrides(&app2, &core, p.environment()) {
             OVERRIDE_TOKENS.with(|d| d.borrow_mut().insert(id, t));
         }
@@ -665,7 +674,7 @@ fn on_event(app: &AppHandle, id: TabId, ev: Event) {
         Event::Message(source, text) => {
             if let Some(c) = core(id) {
                 // 탭에 연 확장 페이지(설정 등)의 호환 메시지 (spec 6.6)
-                if !crate::ext_compat::handle_message(app, &c, &source, &text) {
+                if !crate::adblock::handle_message(&c, &source, &text) && !crate::ext_compat::handle_message(app, &c, &source, &text) {
                     site_scripts::handle_message(app, &c, &source, &text);
                 }
             }
@@ -711,7 +720,13 @@ fn on_event(app: &AppHandle, id: TabId, ev: Event) {
                 tab.can_go_back = back;
                 tab.can_go_forward = forward;
             }
-            Event::Loading(l) => tab.loading = l,
+            Event::Loading(l) => {
+                if l {
+                    // 새 페이지: 막은 개수를 0부터
+                    crate::adblock::page_started(id);
+                }
+                tab.loading = l
+            }
             Event::Title(t) => {
                 new_title = Some((tab.url.clone(), t.clone()));
                 tab.title = t;

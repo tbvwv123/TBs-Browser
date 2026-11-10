@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-adblock-status"
+description = "Enables the adblock_status command without any pre-configured scope."
+commands.allow = ["adblock_status"]
+
+[[permission]]
+identifier = "deny-adblock-status"
+description = "Denies the adblock_status command without any pre-configured scope."
+commands.deny = ["adblock_status"]

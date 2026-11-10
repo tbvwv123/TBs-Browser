@@ -2,7 +2,7 @@
   // 설정 페이지 (spec 5.4). 바꾸면 바로 저장한다.
   import "./page.css";
   import ScriptList from "../ScriptList.svelte";
-  import { host4, siteName, PERMISSION_NAMES, type Settings, type Theme, type SearchEngine, type PermissionKind } from "../api";
+  import { host4, host10, whenText, type AdblockList, siteName, PERMISSION_NAMES, type Settings, type Theme, type SearchEngine, type PermissionKind } from "../api";
   import { ui, report } from "../store.svelte";
 
   const THEMES: [Theme, string][] = [
@@ -47,6 +47,22 @@
       delete x.permissions[site]?.[kind];
       if (x.permissions[site] && !Object.keys(x.permissions[site]).length) delete x.permissions[site];
     });
+  }
+
+  // 광고 차단 (spec 6.7, 시안 L)
+  let lists = $state<AdblockList[]>([]);
+  let updating = $state(false);
+  const loadLists = () => host10.adblockLists().then((l) => (lists = l), report);
+  // 처음 열 때와, 목록을 새로 받아 호스트가 settings_changed를 다시 보낼 때 읽는다
+  $effect(() => {
+    void ui.settings;
+    loadLists();
+  });
+
+  async function updateNow() {
+    updating = true;
+    await host10.adblockUpdateNow().catch(report);
+    setTimeout(() => (updating = false), 1500);
   }
 
   function num(v: string, min: number, max: number, fallback: number) {
@@ -128,6 +144,53 @@
       </section>
 
       <section>
+        <h2 class="page-section-title">광고 차단</h2>
+        <div class="ab-row">
+          <span class="ab-text">
+            <span>광고 차단 사용</span>
+            <span class="ab-sub">끄면 모든 사이트에서 광고를 막지 않습니다</span>
+          </span>
+          <button class="switch" role="switch" aria-checked={s.adblock.enabled} aria-label="광고 차단 사용" onclick={() => save((x) => (x.adblock.enabled = !x.adblock.enabled))}><span></span></button>
+        </div>
+        <div class="ab-subhead">
+          <h3>차단 목록</h3>
+          <button class="page-button" disabled={updating} onclick={updateNow}>{updating ? "받는 중…" : "지금 갱신"}</button>
+        </div>
+        <div class="ab-list">
+          {#each lists as l (l.id)}
+            <div class="ab-row">
+              <span class="ab-text">
+                <span>{l.name}</span>
+                <span class="ab-sub">{l.kind} · 규칙 {l.rules.toLocaleString("ko-KR")}개 · {whenText(l.updated)} 갱신</span>
+              </span>
+              <button class="switch" role="switch" aria-checked={l.enabled} aria-label={l.name} onclick={() => save((x) => (x.adblock.lists[l.id] = !l.enabled))}><span></span></button>
+            </div>
+          {/each}
+        </div>
+        <div class="ab-subhead">
+          <h3>광고 차단을 끈 사이트</h3>
+          {#if s.adblock.disabledSites.length}
+            <button class="page-button ghost" onclick={() => save((x) => (x.adblock.disabledSites = []))}>모두 지우기</button>
+          {/if}
+        </div>
+        {#if s.adblock.disabledSites.length}
+          <div class="ab-list">
+            {#each s.adblock.disabledSites as site (site)}
+              <div class="ab-row short">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"></circle><path d="M3.5 12h17M12 3.5c3 3 3 14 0 17M12 3.5c-3 3-3 14 0 17"></path></svg>
+                <span class="ab-text">{site}</span>
+                <button class="ab-x" aria-label="{site} 지우기" onclick={() => save((x) => (x.adblock.disabledSites = x.adblock.disabledSites.filter((d) => d !== site)))}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>
+                </button>
+              </div>
+            {/each}
+          </div>
+        {:else}
+          <p class="page-muted">주소창의 방패 버튼으로 사이트마다 끌 수 있습니다.</p>
+        {/if}
+      </section>
+
+      <section>
         <h2 class="page-section-title">사이트 스크립트</h2>
         <ScriptList />
       </section>
@@ -165,6 +228,82 @@
     display: flex;
     flex-direction: column;
     gap: 6px;
+  }
+  .ab-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 52px;
+    border-bottom: 1px solid var(--divider);
+  }
+  .ab-row.short {
+    min-height: var(--page-row-height);
+    color: var(--fg-muted);
+  }
+  .ab-row.short .ab-text {
+    color: var(--fg);
+  }
+  .ab-text {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+  .ab-sub {
+    font-size: var(--sub-font-size);
+    color: var(--fg-muted);
+  }
+  .ab-subhead {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    height: var(--page-subhead-height);
+    margin-top: 4px;
+  }
+  .ab-subhead h3 {
+    flex: 1;
+    margin: 0;
+    font-size: var(--page-subhead-size);
+    font-weight: 600;
+    color: var(--fg-muted);
+  }
+  .ab-list {
+    border-top: 1px solid var(--divider);
+  }
+  .ab-x {
+    flex: none;
+    width: var(--small-icon-button);
+    height: var(--small-icon-button);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--small-button-radius);
+    color: var(--fg-muted);
+  }
+  .ab-x:hover {
+    background: var(--hover-bg);
+  }
+  .switch {
+    flex: none;
+    width: var(--switch-width);
+    height: var(--switch-height);
+    padding: var(--switch-padding);
+    border-radius: var(--switch-radius);
+    background: var(--switch-off-bg);
+    display: flex;
+    justify-content: flex-start;
+  }
+  .switch[aria-checked="true"] {
+    background: var(--switch-on-bg);
+    justify-content: flex-end;
+  }
+  .switch span {
+    display: block;
+    width: var(--switch-knob);
+    height: var(--switch-knob);
+    border-radius: 50%;
+    background: var(--switch-knob-bg);
   }
   .numbers {
     display: flex;

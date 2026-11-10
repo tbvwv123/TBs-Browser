@@ -152,6 +152,8 @@ export interface Settings {
   memory: { suspendAfterMinutes: number; discardAfterMinutes: number; maxAwakeTabs: number };
   /** 사이트별 권한 (spec 5.5): 사이트 → 권한 이름 → "allow" | "block" */
   permissions: Record<string, Record<string, "allow" | "block">>;
+  /** 광고 차단 (spec 6.7) */
+  adblock: { enabled: boolean; lists: Record<string, boolean>; disabledSites: string[] };
 }
 
 export interface Visit {
@@ -198,7 +200,7 @@ export const host4 = {
   fullscreenState: () => invoke<boolean>("fullscreen_state"),
 };
 
-export type PopupKind = "suggest" | "downloads" | "menu" | "bookmarks" | "extensions" | "install";
+export type PopupKind = "suggest" | "downloads" | "menu" | "bookmarks" | "extensions" | "install" | "adblock";
 
 // ───── 7단계: 접힌 사이드바, 새 탭 화면, 테마, 권한 ─────
 
@@ -393,4 +395,58 @@ export function chromeMatches(pattern: string, url: string): boolean {
 
 export function extApplies(e: ExtInfo, url: string): boolean {
   return e.enabled && e.matches.some((p) => chromeMatches(p, url));
+}
+
+// ───── 10단계: 광고 차단 (spec 6.7) ─────
+
+export interface AdblockStatus {
+  enabled: boolean;
+  site: string | null;
+  siteEnabled: boolean;
+  count: number;
+  updated: number;
+  busy: boolean;
+  error: string | null;
+}
+
+export interface AdblockList {
+  id: string;
+  name: string;
+  kind: string;
+  enabled: boolean;
+  rules: number;
+  updated: number;
+}
+
+export const host10 = {
+  adblockStatus: (tab: TabId | null) => invoke<AdblockStatus>("adblock_status", { tab }),
+  adblockSetSite: (site: string, enabled: boolean) => invoke<void>("adblock_set_site", { site, enabled }),
+  adblockLists: () => invoke<AdblockList[]>("adblock_lists"),
+  adblockUpdateNow: () => invoke<void>("adblock_update_now"),
+  adblockReload: () => invoke<void>("adblock_reload"),
+};
+
+/** 광고 차단에서 쓰는 사이트 이름 ("www."를 뺀 호스트). 웹 페이지가 아니면 null */
+export function adblockSite(url: string): string | null {
+  if (!/^https?:/.test(url)) return null;
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return null;
+  }
+}
+
+/** "오늘 오전 9:12", "어제", "11월 3일" */
+export function whenText(ms: number): string {
+  if (!ms) return "아직 받지 않음";
+  const d = new Date(ms);
+  const now = new Date();
+  const day = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const diff = Math.round((day(now) - day(d)) / 86400000);
+  if (diff === 0) {
+    const h = d.getHours();
+    return `오늘 ${h < 12 ? "오전" : "오후"} ${h % 12 || 12}:${String(d.getMinutes()).padStart(2, "0")}`;
+  }
+  if (diff === 1) return "어제";
+  return `${d.getMonth() + 1}월 ${d.getDate()}일`;
 }

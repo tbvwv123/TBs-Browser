@@ -40,6 +40,23 @@ impl SearchEngine {
     }
 }
 
+/// 광고 차단 설정 (spec 6.7)
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct AdblockSettings {
+    pub enabled: bool,
+    /// 목록 ID("easylist" 등) → 켜짐. 없으면 켜짐
+    pub lists: BTreeMap<String, bool>,
+    /// 광고 차단을 끈 사이트 ("youtube.com")
+    pub disabled_sites: Vec<String>,
+}
+
+impl Default for AdblockSettings {
+    fn default() -> Self {
+        AdblockSettings { enabled: true, lists: BTreeMap::new(), disabled_sites: Vec::new() }
+    }
+}
+
 /// 메모리 정책 값 (spec 7장). 6단계에서 적용한다.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase", default)]
@@ -68,6 +85,7 @@ pub struct Settings {
     pub memory: MemoryPolicy,
     /// 사이트별 권한 (spec 5.5, 8장). 사이트("https://host") → 권한 이름("camera" 등) → "allow" | "block"
     pub permissions: BTreeMap<String, BTreeMap<String, String>>,
+    pub adblock: AdblockSettings,
 }
 
 impl Default for Settings {
@@ -80,6 +98,7 @@ impl Default for Settings {
             restore_tabs: true,
             memory: MemoryPolicy::default(),
             permissions: BTreeMap::new(),
+            adblock: AdblockSettings::default(),
         }
     }
 }
@@ -116,10 +135,18 @@ pub fn get(app: &AppHandle) -> Settings {
     app.state::<SettingsStore>().0.lock().unwrap().clone()
 }
 
+/// 설정이 바뀐 것을 UI에 다시 알린다 (목록 갱신처럼 설정 밖의 값이 바뀌었을 때)
+pub fn notify(app: &AppHandle) {
+    let s = get(app);
+    let _ = app.emit_to(EventTarget::webview(UI_WEBVIEW), "settings_changed", &s);
+}
+
 pub fn set(app: &AppHandle, mut s: Settings) -> Result<Settings, String> {
     s.version = VERSION;
     s.memory.max_awake_tabs = s.memory.max_awake_tabs.max(1);
     s.permissions.retain(|_, m| !m.is_empty());
+    s.adblock.disabled_sites.sort();
+    s.adblock.disabled_sites.dedup();
     *app.state::<SettingsStore>().0.lock().unwrap() = s.clone();
     let _ = app.emit_to(EventTarget::webview(UI_WEBVIEW), "settings_changed", &s);
     storage::save(&file(), &s)?;

@@ -192,6 +192,29 @@ fn hook_loop(app: AppHandle, dir: std::path::PathBuf) {
                 });
                 rx.recv_timeout(Duration::from_secs(5)).unwrap_or_else(|_| "timeout".into())
             }
+            // 속도 시험: "netfilter <탭 id> on|off" → 그 탭의 모든 요청을 호스트 처리기로 보낸다 (광고 차단과 같은 길)
+            ("netfilter", _) => {
+                let id: crate::state::TabId = label.parse().unwrap_or_default();
+                let on = rest == "on";
+                let _ = app.run_on_main_thread(move || unsafe {
+                    use windows::core::Interface;
+                    let r = match crate::browser::core_of(id).and_then(|c| c.cast::<ICoreWebView2_22>().ok()) {
+                        Some(c) if on => c.AddWebResourceRequestedFilterWithRequestSourceKinds(
+                            windows::core::w!("*"),
+                            COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL,
+                            COREWEBVIEW2_WEB_RESOURCE_REQUEST_SOURCE_KINDS_ALL,
+                        ),
+                        Some(c) => c.RemoveWebResourceRequestedFilterWithRequestSourceKinds(
+                            windows::core::w!("*"),
+                            COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL,
+                            COREWEBVIEW2_WEB_RESOURCE_REQUEST_SOURCE_KINDS_ALL,
+                        ),
+                        None => Err(windows::core::Error::from_hresult(windows::core::HRESULT(-1))),
+                    };
+                    let _ = tx.send(format!("{r:?}"));
+                });
+                rx.recv_timeout(Duration::from_secs(5)).unwrap_or_else(|_| "timeout".into())
+            }
             // 업데이트 시험: "update" → 확인해 둔 새 버전을 내려받아 서명을 검사한다 (설치하지 않는다)
             ("update", _) => tauri::async_runtime::block_on(crate::updater::dev_download(&app)),
             // DevTools 명령을 그대로 보낸다: "cdp <label> <method> <json>"

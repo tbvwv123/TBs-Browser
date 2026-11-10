@@ -77,6 +77,11 @@
     "allow-ext-set-pinned",
     "allow-ext-remove",
     "allow-ext-open-popup",
-    "allow-ext-open-options"
+    "allow-ext-open-options",
+    "allow-adblock-status",
+    "allow-adblock-set-site",
+    "allow-adblock-lists",
+    "allow-adblock-update-now",
+    "allow-adblock-reload"
   ]
 }

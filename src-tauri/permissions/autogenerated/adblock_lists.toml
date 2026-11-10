@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-adblock-lists"
+description = "Enables the adblock_lists command without any pre-configured scope."
+commands.allow = ["adblock_lists"]
+
+[[permission]]
+identifier = "deny-adblock-lists"
+description = "Denies the adblock_lists command without any pre-configured scope."
+commands.deny = ["adblock_lists"]

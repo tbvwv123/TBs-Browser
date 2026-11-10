@@ -70,6 +70,11 @@ fn main() {
         "ext_open_popup",
         "ext_open_options",
         "popup_fit",
+        "adblock_status",
+        "adblock_set_site",
+        "adblock_lists",
+        "adblock_update_now",
+        "adblock_reload",
     ])))
     .expect("tauri-build 실패");
 }

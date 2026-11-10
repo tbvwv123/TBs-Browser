@@ -1,6 +1,7 @@
 // 릴리스 빌드에서는 콘솔 창을 띄우지 않는다
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod adblock;
 mod bookmarks;
 mod browser;
 mod dev;
@@ -252,7 +253,58 @@ async fn settings_get(app: AppHandle) -> Settings {
 
 #[tauri::command]
 async fn settings_set(app: AppHandle, value: Settings) -> Result<Settings, String> {
-    settings::set(&app, value)
+    let lists_before = settings::get(&app).adblock.lists;
+    let s = settings::set(&app, value)?;
+    // 광고 차단 설정을 반영한다 (켜짐·끈 사이트는 바로, 목록을 바꾸면 엔진을 다시 만든다)
+    let lists_changed = lists_before != s.adblock.lists;
+    on_main(&app, move |a| {
+        adblock::apply_settings(a);
+        if lists_changed {
+            adblock::lists_changed(a);
+        }
+    })?;
+    Ok(s)
+}
+
+// ───────────── 10단계: 광고 차단 (spec 6.7) ─────────────
+
+/// 지금 탭의 광고 차단 상태 (방패 버튼, 광고 차단 팝업)
+#[tauri::command]
+async fn adblock_status(app: AppHandle, tab: Option<TabId>) -> Result<adblock::Status, String> {
+    on_main(&app, move |a| adblock::status(a, tab))
+}
+
+/// 이 사이트에서 광고 차단을 켜거나 끈다
+#[tauri::command]
+async fn adblock_set_site(app: AppHandle, site: String, enabled: bool) -> Result<(), String> {
+    let mut s = settings::get(&app);
+    s.adblock.disabled_sites.retain(|x| x != &site);
+    if !enabled {
+        s.adblock.disabled_sites.push(site);
+    }
+    settings::set(&app, s)?;
+    on_main(&app, |a| adblock::apply_settings(a))
+}
+
+#[tauri::command]
+async fn adblock_lists(app: AppHandle) -> Vec<adblock::ListInfo> {
+    adblock::lists(&app)
+}
+
+#[tauri::command]
+async fn adblock_update_now(app: AppHandle) {
+    adblock::update_now(&app);
+}
+
+/// 광고 차단 팝업의 "새로고침": 지금 탭을 다시 불러온다
+#[tauri::command]
+async fn adblock_reload(app: AppHandle) -> Result<(), String> {
+    on_main(&app, |a| {
+        if let Some(id) = browser::snapshot(a).active {
+            browser::reload(a, id);
+        }
+        popup::hide(a);
+    })
 }
 
 /// 다운로드 폴더 고르기. 고르지 않으면 None.
@@ -657,7 +709,12 @@ fn main() {
             ext_remove,
             ext_open_popup,
             ext_open_options,
-            popup_fit
+            popup_fit,
+            adblock_status,
+            adblock_set_site,
+            adblock_lists,
+            adblock_update_now,
+            adblock_reload
         ])
         .setup(|app| {
             let handle = app.handle().clone();
@@ -715,6 +772,7 @@ fn main() {
             }
             popup::create(&handle, &win)?;
             extensions::start(&handle);
+            adblock::start(&handle);
             // 이전 탭 복원 (설정에서 끌 수 있다). 복원하지 않으면 새 탭 하나로 시작한다.
             let restored = if settings::get(&handle).restore_tabs {
                 match session::load() {

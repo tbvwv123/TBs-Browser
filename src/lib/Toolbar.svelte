@@ -2,7 +2,8 @@
   // 상단 툴바 (spec 4.4): 뒤로, 앞으로, 새로고침, 주소창, 다운로드 표시, 창 버튼. 빈 곳은 창을 끄는 영역이다.
   import { onMount, tick } from "svelte";
   import { getCurrentWindow } from "@tauri-apps/api/window";
-  import { host, host4, on, displayUrl, readableUrl, isBookmarked, type Suggestion } from "./api";
+  import { host, host4, host10, on, displayUrl, readableUrl, isBookmarked, adblockSite, type Suggestion } from "./api";
+  import { token } from "./store.svelte";
   import { ui, report, activeTab } from "./store.svelte";
 
   let { maxHover, maximized, onMaxButton }: { maxHover: boolean; maximized: boolean; onMaxButton: (el: HTMLButtonElement) => void } = $props();
@@ -27,6 +28,22 @@
   const blank = $derived(!active?.url);
   const secure = $derived(!!active?.url.startsWith("https://"));
   const starred = $derived(!!active?.url && isBookmarked(ui.bookmarks.items, active.url));
+  // 광고 차단 방패 (spec 6.7, 시안 L): 웹 페이지에서만 보이고, 이 사이트에서 껐으면 빗금
+  const shieldSite = $derived(adblockSite(active?.url ?? ""));
+  const shieldOn = $derived(!!ui.settings?.adblock.enabled && !!shieldSite && !ui.settings.adblock.disabledSites.includes(shieldSite));
+  let shieldButton: HTMLButtonElement | undefined = $state();
+
+  async function showAdblock() {
+    if (!shieldButton) return;
+    const status = await host10.adblockStatus(ui.activeId).catch((e) => {
+      report(e);
+      return null;
+    });
+    if (!status) return;
+    const bar = addressBox.getBoundingClientRect();
+    const w = token("--adblock-popup-width");
+    host4.popupShow("adblock", { x: bar.right - 6 - w, y: bar.bottom + 6, w, h: 240 }, { status }).catch(report);
+  }
 
   // 다운로드 진행 고리 (spec 4.4): 진행 중일 때만 보인다
   const running = $derived(ui.downloads.filter((d) => d.state === "progress"));
@@ -219,6 +236,21 @@
       spellcheck="false"
       autocomplete="off"
     />
+    {#if shieldSite}
+      <button
+        class="shield"
+        class:off={!shieldOn}
+        bind:this={shieldButton}
+        aria-label={shieldOn ? "광고 차단 켜짐" : "이 사이트에서 광고 차단 꺼짐"}
+        title="광고 차단"
+        onclick={showAdblock}
+      >
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z"></path>
+          {#if !shieldOn}<path d="M4 4l16 16"></path>{/if}
+        </svg>
+      </button>
+    {/if}
     {#if !blank}
       <button class="star" aria-label={starred ? "북마크에서 빼기" : "북마크에 추가"} aria-pressed={starred} disabled={internal} onclick={toggleStar}>
         <svg width="15" height="15" viewBox="0 0 24 24" fill={starred ? "currentColor" : "none"} stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 4l2.5 5 5.5.8-4 3.9.9 5.5-4.9-2.6-4.9 2.6.9-5.5-4-3.9 5.5-.8z"></path></svg>
@@ -340,6 +372,18 @@
     align-items: center;
     justify-content: center;
     color: var(--fg-muted);
+  }
+  .shield {
+    flex: none;
+    width: var(--address-shield-width);
+    height: var(--address-height);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--fg-muted);
+  }
+  .shield.off {
+    color: var(--fg-disabled);
   }
   .star:disabled {
     cursor: default;

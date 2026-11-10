@@ -25,6 +25,10 @@
     "allow-scripts-reload",
     "allow-scripts-open-folder",
     "allow-popup-fit",
-    "allow-ext-install-pick"
+    "allow-ext-install-pick",
+    "allow-adblock-status",
+    "allow-adblock-set-site",
+    "allow-adblock-reload",
+    "allow-run-shortcut"
   ]
 }

@@ -6,6 +6,8 @@
   import { host4, host5, host9, on, readableUrl, fileName, formatBytes, type Suggestion, type Download, type BookmarkNode, type ExtInfo, type ScriptInfo } from "./api";
   import ExtensionsPanel from "./ExtensionsPanel.svelte";
   import InstallConfirm from "./InstallConfirm.svelte";
+  import AdblockPopup from "./AdblockPopup.svelte";
+  import type { AdblockStatus } from "./api";
 
   type MenuEntry = { label: string; danger: boolean; icon: string[] | null };
   type Theme = { theme: string };
@@ -15,7 +17,8 @@
     | { kind: "menu"; data: Theme & { items: MenuEntry[] } }
     | { kind: "bookmarks"; data: Theme & { items: BookmarkNode[] } }
     | { kind: "extensions"; data: Theme & { url: string; anchor: { x: number; bottom: number } } }
-    | { kind: "install"; data: Theme & { info: ExtInfo } };
+    | { kind: "install"; data: Theme & { info: ExtInfo } }
+    | { kind: "adblock"; data: Theme & { status: AdblockStatus } };
   let view = $state<Data | null>(null);
   let error = $state("");
   // 접힌 사이드바의 확장 패널 (시안 K): 목록은 팝업이 직접 받아 온다
@@ -58,7 +61,7 @@
       if (d.kind === "extensions") loadLists();
       view = d;
       error = "";
-      if (d.kind === "extensions" || d.kind === "install") tick().then(refit);
+      if (d.kind === "extensions" || d.kind === "install" || d.kind === "adblock") tick().then(refit);
     });
     const offs = [
       on<ScriptInfo[]>("scripts_changed", (l) => (scripts = l)),
@@ -108,6 +111,11 @@
   <!-- 확장 패널은 버튼에 아래 끝을 맞춘다: 창 높이를 맞추기 전에도 버튼 옆에 보이게 아래에 붙여 그린다 -->
   <div class="fit bottom" bind:this={fitted}>
     <ExtensionsPanel scripts={scripts} extensions={exts} url={view.data.url} onError={(e) => (error = String(e))} popupAnchor={() => (view as any).data.anchor} />
+    {#if error}<p class="error fit-error">{error}</p>{/if}
+  </div>
+{:else if view?.kind === "adblock"}
+  <div class="fit" bind:this={fitted}>
+    <AdblockPopup status={view.data.status} onError={(e) => (error = String(e))} />
     {#if error}<p class="error fit-error">{error}</p>{/if}
   </div>
 {:else if view?.kind === "install"}
