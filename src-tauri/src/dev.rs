@@ -33,42 +33,20 @@ pub fn move_to_dev_desktop(hwnd: isize) {
 }
 
 /// 숨겨 만든 창을 보인다. 개발용 데스크톱이 정해져 있으면 그리로 옮기고 활성화 없이 보인다.
+/// tao가 창이 보이는 줄 알아야 최소화·최대화·전체 화면 때 창 모양을 맞게 다시 쓴다. 그래서 tao로 보이되,
+/// 그동안만 활성화되지 않는 창(WS_EX_NOACTIVATE)으로 둔다.
 pub fn show_main_window(window: &tauri::Window) {
     if quiet() {
         if let Ok(hwnd) = window.hwnd() {
             move_to_dev_desktop(hwnd.0 as isize);
-            unsafe {
-                use windows::Win32::{
-                    Foundation::HWND,
-                    UI::WindowsAndMessaging::{ShowWindow, SW_SHOWNA},
-                };
-                let _ = ShowWindow(HWND(hwnd.0), SW_SHOWNA);
-            }
+            let _ = window.set_focusable(false);
+            let _ = window.show();
+            let _ = window.set_focusable(true);
             return;
         }
     }
     let _ = window.show();
     let _ = window.set_focus();
-}
-
-/// 개발용 데스크톱에서는 창을 tao를 거치지 않고 보였기 때문에, 최소화·최대화·전체 화면으로 tao가 창 모양을 다시 쓰면
-/// 보임 표시가 빠져 작업 표시줄에서도 사라진다. 창 크기가 바뀔 때마다 활성화 없이 다시 보인다.
-#[allow(unused_variables)]
-pub fn keep_visible(window: &tauri::Window) {
-    if !quiet() {
-        return;
-    }
-    if let Ok(h) = window.hwnd() {
-        use windows::Win32::{
-            Foundation::HWND,
-            UI::WindowsAndMessaging::{IsWindowVisible, ShowWindow, SW_SHOWNA},
-        };
-        unsafe {
-            if !IsWindowVisible(HWND(h.0)).as_bool() {
-                let _ = ShowWindow(HWND(h.0), SW_SHOWNA);
-            }
-        }
-    }
 }
 
 #[cfg(not(debug_assertions))]

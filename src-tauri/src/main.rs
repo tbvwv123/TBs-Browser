@@ -829,7 +829,6 @@ fn main() {
                     }
                     if let tauri::WindowEvent::Resized(_) = e {
                         let _ = h.emit_to(EventTarget::webview(UI_WEBVIEW), "window_maximized", w2.is_maximized().unwrap_or(false));
-                        dev::keep_visible(&w2);
                     }
                 });
             }
