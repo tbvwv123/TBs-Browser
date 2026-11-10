@@ -248,6 +248,8 @@ pub struct ScriptInfo {
     pub values: Map<String, Value>,
     pub shortcuts: Vec<ShortcutDef>,
     pub actions: Vec<ActionDef>,
+    /// 저장소에 새 판이 있으면 그 판 (spec 6.8)
+    pub update: Option<String>,
 }
 
 impl Script {
@@ -269,6 +271,7 @@ impl Script {
             values: self.values.clone(),
             shortcuts: m.shortcuts.clone(),
             actions: m.actions.clone(),
+            update: None,
         }
     }
 
@@ -682,7 +685,7 @@ pub fn storage_op(dir: &Path, op: &str, key: Option<&str>, value: Option<&Value>
 /// 스크립트 폴더 전체를 읽는다. 이름 순.
 pub fn load_all(root: &Path) -> Vec<Script> {
     let mut out: Vec<Script> = std::fs::read_dir(root)
-        .map(|rd| rd.filter_map(|e| e.ok()).map(|e| e.path()).filter(|p| p.is_dir() && p.join("script.json").exists()).map(|p| load_one(&p)).collect())
+        .map(|rd| rd.filter_map(|e| e.ok()).map(|e| e.path()).filter(|p| p.is_dir() && p.join("script.json").exists() && !p.file_name().is_some_and(|n| n.to_string_lossy().starts_with('.'))).map(|p| load_one(&p)).collect())
         .unwrap_or_default();
     // id가 겹치면 뒤의 것을 오류로 표시한다
     let mut seen: HashMap<String, usize> = HashMap::new();

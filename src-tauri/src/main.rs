@@ -26,6 +26,7 @@ mod shortcuts;
 mod site_scripts;
 mod state;
 mod storage;
+mod store;
 mod updater;
 
 use tauri::{
@@ -656,6 +657,26 @@ async fn script_remove(app: AppHandle, id: String) -> Result<(), String> {
     })
 }
 
+// ───────────── 스크립트 저장소 (spec 6.8) ─────────────
+
+/// 찾아보기 목록. `refresh`면 새로 받는다
+#[tauri::command]
+async fn store_list(refresh: bool) -> Result<Vec<serde_json::Value>, String> {
+    tauri::async_runtime::spawn_blocking(move || store::list_json(refresh)).await.map_err(|e| e.to_string())?
+}
+
+/// "설치"·"업데이트": 확인 창을 띄우거나(권한이 늘지 않은 업데이트는 바로) 설치한다
+#[tauri::command]
+async fn store_install(app: AppHandle, id: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || store::begin(&app, &id)).await.map_err(|e| e.to_string())?
+}
+
+/// 설치·업데이트 확인 창의 답
+#[tauri::command]
+async fn store_confirm(app: AppHandle, id: String, accept: bool) {
+    store::confirm(&app, &id, accept);
+}
+
 /// "다시 불러오기": 폴더를 다시 읽고 열린 탭에 새로 등록한다
 #[tauri::command]
 async fn scripts_reload(app: AppHandle) -> Result<Vec<scripts::ScriptInfo>, String> {
@@ -750,6 +771,9 @@ fn main() {
             script_open_settings,
             script_run_action,
             script_remove,
+            store_list,
+            store_install,
+            store_confirm,
             script_set_pinned,
             scripts_reload,
             scripts_open_folder,
@@ -789,6 +813,7 @@ fn main() {
             app.manage(hist);
             site_scripts::seed_examples();
             site_scripts::reload(&handle);
+            store::start(&handle);
             if let Some(n) = note {
                 library::notice(&handle, n);
             }

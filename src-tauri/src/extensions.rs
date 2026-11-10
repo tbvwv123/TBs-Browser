@@ -491,7 +491,7 @@ fn copy_dir(from: &Path, to: &Path) -> std::io::Result<()> {
 }
 
 /// zip을 푼다. 폴더 밖으로 나가는 이름(../)은 건너뛴다
-fn unzip(zip: &Path, to: &Path) -> Result<(), String> {
+pub(crate) fn unzip(zip: &Path, to: &Path) -> Result<(), String> {
     let f = fs::File::open(zip).map_err(|e| format!("zip 파일을 열지 못했습니다({e})."))?;
     let mut archive = zip::ZipArchive::new(f).map_err(|e| format!("zip 파일이 아니거나 깨졌습니다({e})."))?;
     for i in 0..archive.len() {

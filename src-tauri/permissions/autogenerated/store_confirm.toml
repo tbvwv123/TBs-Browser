@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-store-confirm"
+description = "Enables the store_confirm command without any pre-configured scope."
+commands.allow = ["store_confirm"]
+
+[[permission]]
+identifier = "deny-store-confirm"
+description = "Denies the store_confirm command without any pre-configured scope."
+commands.deny = ["store_confirm"]

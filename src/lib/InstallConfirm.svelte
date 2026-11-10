@@ -7,7 +7,18 @@
 
   const update = $derived(info.updateFrom !== null);
   const script = $derived(info.kind === "script");
-  const head = $derived(script ? "스크립트 켜기" : update ? "업데이트 확인" : "크롬 확장 설치");
+  const mode = $derived(info.mode ?? "enable");
+  const head = $derived(
+    !script ? (update ? "업데이트 확인" : "크롬 확장 설치")
+    : mode === "install" ? "스크립트 설치"
+    : mode === "update" ? "업데이트 확인"
+    : info.allSites ? "모든 사이트에서 켜기" : "스크립트 켜기",
+  );
+  const button = $derived(!script ? (update ? "업데이트" : "설치") : mode === "install" ? "설치" : mode === "update" ? "업데이트" : "켜기");
+  /** 업데이트로 새로 생긴 권한 (시안 M: 늘어난 것만 강조) */
+  const added = $derived(new Set(info.newPermissions ?? []));
+  const scriptUpdate = $derived(script && mode === "update");
+  const addedText = $derived(added.size === 1 ? "권한이 하나 늘었습니다. 나머지는 그대로입니다." : `권한이 ${added.size}개 늘었습니다. 나머지는 그대로입니다.`);
   const meta = $derived(
     [info.author && `만든 사람 ${info.author}`, update ? `버전 ${info.updateFrom} → ${info.version}` : info.version && `버전 ${info.version}`]
       .filter(Boolean)
@@ -31,11 +42,20 @@
       {#if meta}<span class="meta">{meta}</span>{/if}
     </div>
   </div>
-  {#if info.description}<p class="desc">{info.description}</p>{/if}
+  {#if scriptUpdate}
+    {#if added.size}<p class="desc">{addedText}</p>{/if}
+  {:else if info.description}
+    <p class="desc">{info.description}</p>
+  {/if}
 
   <div class="block">
     <h3 class="label">적용 사이트</h3>
-    {#if info.allSites}
+    {#if scriptUpdate && !info.sitesChanged}
+      <div class="chips same">
+        <span class="chip">{info.allSites ? "모든 사이트" : info.sites.join(", ")}</span>
+        <span class="meta">변경 없음</span>
+      </div>
+    {:else if info.allSites}
       <!-- 무채색 안에서 가장 강한 대비: 색을 뒤집은 면 (시안 M) -->
       <div class="warn">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4l9 16H3z"></path><path d="M12 10v4M12 17v.5"></path></svg>
@@ -57,24 +77,33 @@
     <div class="block tight">
       <h3 class="label">권한</h3>
       <ul class="perms">
-        {#each info.permissions as p}
-          <li>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg>
-            <span>{p}</span>
-          </li>
+        {#each [...info.permissions].sort((a, b) => Number(added.has(b)) - Number(added.has(a))) as p}
+          {#if added.has(p)}
+            <li class="added">
+              <span class="new-tag">새로 추가</span>
+              <span>{p}</span>
+            </li>
+          {:else}
+            <li class:old={scriptUpdate}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg>
+              <span>{p}</span>
+            </li>
+          {/if}
         {/each}
       </ul>
     </div>
   {/if}
 
-  <div class="note">
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"></circle><path d="M12 11v5M12 8v.5"></path></svg>
-    <span>{info.error ?? (script ? "새로고침해야 적용됩니다" : "크롬 확장의 일부 기능은 동작하지 않을 수 있습니다.")}</span>
-  </div>
+  {#if !script || info.error}
+    <div class="note">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"></circle><path d="M12 11v5M12 8v.5"></path></svg>
+      <span>{info.error ?? "크롬 확장의 일부 기능은 동작하지 않을 수 있습니다."}</span>
+    </div>
+  {/if}
 
   <div class="buttons">
     <button class="button" onclick={() => onAnswer(false)}>취소</button>
-    <button class="button primary" onclick={() => onAnswer(true)}>{script ? "켜기" : update ? "업데이트" : "설치"}</button>
+    <button class="button primary" onclick={() => onAnswer(true)}>{button}</button>
   </div>
 </section>
 
@@ -221,6 +250,29 @@
   }
   .perms svg {
     flex: none;
+  }
+  .perms li.old,
+  .chips.same {
+    color: var(--fg-muted);
+  }
+  .chips.same {
+    align-items: center;
+  }
+  .perms li.added {
+    font-weight: 600;
+  }
+  /* 새로 생긴 권한: 색을 뒤집은 꼬리표 (시안 M) */
+  .new-tag {
+    flex: none;
+    height: var(--tag-height);
+    padding: var(--tag-padding);
+    border-radius: var(--tag-radius);
+    background: var(--prompt-primary-bg);
+    color: var(--prompt-primary-fg);
+    font-size: var(--tag-font-size);
+    font-weight: 600;
+    line-height: var(--tag-height);
+    white-space: nowrap;
   }
   .note {
     display: flex;

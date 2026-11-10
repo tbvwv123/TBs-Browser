@@ -2,7 +2,7 @@
   // 확장 패널 (spec 6.4·6.6, 시안 K): 사이트 스크립트와 크롬 확장을 한 목록에 보여준다.
   // 펼친 사이드바에서는 사이드바 안에, 접힌 사이드바에서는 페이지 위 팝업 창 안에 그린다.
   // 줄은 켜기·끄기만 늘 보이고, 누르면 펼쳐져 팝업 열기·설정·고정·지우기가 나온다.
-  import { host5, host9, scriptApplies, extApplies, type ScriptInfo, type ExtInfo } from "./api";
+  import { host4, host5, host9, host12, scriptApplies, extApplies, type ScriptInfo, type ExtInfo } from "./api";
 
   let {
     scripts,
@@ -34,6 +34,8 @@
     options: boolean;
     /** 사이트 스크립트의 "이 탭에서 실행" 버튼 (spec 6.1 actions) */
     actions: { id: string; name: string }[];
+    /** 저장소에 있는 새 판 (spec 6.8) */
+    update: string | null;
   };
 
   let expanded = $state<string | null>(null);
@@ -74,6 +76,7 @@
         popup: false,
         options: s.settings.length > 0,
         actions: s.actions,
+        update: s.update,
       };
     }),
     ...extensions.map((e): Item => ({
@@ -90,6 +93,7 @@
       popup: !!e.popup,
       options: !!e.options,
       actions: [],
+      update: null,
     })),
   ]);
   const here = $derived(items.filter((i) => i.applies));
@@ -123,6 +127,11 @@
     run(host9.extOpenPopup(i.id, a.x, a.bottom));
   }
 
+  function openStore() {
+    host4.popupHide().catch(() => {});
+    run(host4.runShortcut("store"));
+  }
+
   function install(folder: boolean) {
     installChoice = false;
     run(host9.extInstallPick(folder));
@@ -154,7 +163,10 @@
             {/if}
           </span>
           <span class="sub">
-            {#if i.error}
+            {#if i.update && !i.error}
+              <!-- 업데이트: 색 대신 굵은 글자와 점 (시안 K) -->
+              <span class="update"><span class="dot" aria-hidden="true"></span>업데이트 있음</span>
+            {:else if i.error}
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4l9 16H3z"></path><path d="M12 10v4M12 17v.5"></path></svg>
               <span class="err" title={i.error}>{i.kind === "script" ? "파일 오류" : "오류"}</span>
             {:else}
@@ -186,6 +198,9 @@
         {:else}
           {#if i.popup}
             <button class="small primary" disabled={!i.enabled} onclick={() => openPopup(i)}>팝업 열기</button>
+          {/if}
+          {#if i.update}
+            <button class="small primary" disabled={busy} onclick={() => run(host12.storeInstall(i.id))}>업데이트</button>
           {/if}
           {#if i.applies && !i.error}
             {#each i.actions as a (a.id)}
@@ -234,6 +249,7 @@
       <button class="small" onclick={() => install(true)}>압축 푼 폴더</button>
       <button class="small ghost" onclick={() => (installChoice = false)}>취소</button>
     {:else}
+      <button class="small" onclick={openStore}>찾아보기</button>
       <button class="small" disabled={busy} onclick={() => (installChoice = true)}>설치…</button>
       <span class="spacer"></span>
       <button class="icon-button" aria-label="스크립트 폴더 열기" title="스크립트 폴더 열기" onclick={() => run(host5.scriptsOpenFolder())}>
@@ -370,6 +386,19 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  .update {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-weight: 600;
+    color: var(--fg);
+  }
+  .update .dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--fg);
   }
   .err {
     flex: none;

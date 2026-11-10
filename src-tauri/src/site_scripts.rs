@@ -62,7 +62,17 @@ fn store(app: &AppHandle) -> tauri::State<'_, ScriptStore> {
 }
 
 pub fn list(app: &AppHandle) -> Vec<ScriptInfo> {
-    store(app).0.lock().unwrap().iter().map(|s| s.info()).collect()
+    store(app)
+        .0
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|s| {
+            let mut i = s.info();
+            i.update = crate::store::update_for(&i.id, &i.version);
+            i
+        })
+        .collect()
 }
 
 /// 폴더를 다시 읽는다
@@ -418,7 +428,7 @@ pub fn prompt_info(s: &Script) -> Value {
         }
     }
     json!({
-        "kind": "script",
+        "kind": "script", "mode": "enable",
         "id": m.id, "name": s.info().name, "version": m.version, "description": m.description, "author": m.author,
         "enabled": m.enabled, "pinned": m.pinned, "icon": s.icon, "popup": null, "options": null,
         "matches": m.matches, "allSites": s.all_sites(), "sites": sites,

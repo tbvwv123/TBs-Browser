@@ -1,5 +1,5 @@
 // UI가 그리는 상태. 원본은 호스트에 있고, 여기 값은 호스트가 보낸 것을 받아 둔 것이다.
-import { host, host4, host7, host8, host9, displayUrl, internalTitle, type ExtInfo, type Bookmarks, type Download, type Group, type PermissionRequest, type ScriptInfo, type Settings, type Tab, type TabId } from "./api";
+import { host, host4, host7, host8, host9, host12, displayUrl, internalTitle, type ExtInfo, type Bookmarks, type Download, type Group, type PermissionRequest, type ScriptInfo, type Settings, type Tab, type TabId } from "./api";
 
 export interface MenuItem {
   label: string;
@@ -93,7 +93,10 @@ export function showInstall(info: ExtInfo) {
 export function cancelInstall() {
   if (!ui.install) return;
   const script = ui.install.kind === "script";
+  const fromStore = ui.install.mode === "install" || ui.install.mode === "update";
+  const id = ui.install.id;
   ui.install = null;
+  if (fromStore) host12.storeConfirm(id, false).catch(() => {});
   if (script) host4.popupHide().catch(() => {});
   else host9.extInstallConfirm(false).catch(() => {});
 }

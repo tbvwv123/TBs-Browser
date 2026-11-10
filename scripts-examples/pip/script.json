@@ -2,6 +2,7 @@
   "id": "pip",
   "name": "어떤 영상이든 PiP",
   "version": "1.0.0",
+  "description": "영상을 PiP로 띄우기",
   "author": "TB's Browser",
   "icon": "icon.svg",
   "matches": [

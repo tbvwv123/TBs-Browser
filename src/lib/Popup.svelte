@@ -3,7 +3,7 @@
   // 접힌 사이드바의 메뉴와 북마크 목록 (spec 4.6).
   // 창은 투명하고, 그림자를 그릴 여백(왼쪽·오른쪽·아래 16px)을 둔다.
   import { onMount, tick } from "svelte";
-  import { host4, host5, host9, on, readableUrl, fileName, formatBytes, type Suggestion, type Download, type BookmarkNode, type ExtInfo, type ScriptInfo } from "./api";
+  import { host4, host5, host9, host12, on, readableUrl, fileName, formatBytes, type Suggestion, type Download, type BookmarkNode, type ExtInfo, type ScriptInfo } from "./api";
   import ExtensionsPanel from "./ExtensionsPanel.svelte";
   import InstallConfirm from "./InstallConfirm.svelte";
   import AdblockPopup from "./AdblockPopup.svelte";
@@ -75,8 +75,9 @@
   }
 
   /** 스크립트 켜기 확인의 답: 켜기를 누르면 확인한 것으로 켠다 */
-  async function answerScript(id: string, accept: boolean) {
-    if (accept) await host5.scriptSetEnabled(id, true, true);
+  async function answerScript(info: ExtInfo, accept: boolean) {
+    if (info.mode === "install" || info.mode === "update") await host12.storeConfirm(info.id, accept);
+    else if (accept) await host5.scriptSetEnabled(info.id, true, true);
     await host4.popupHide();
   }
 </script>
@@ -126,7 +127,7 @@
   </div>
 {:else if view?.kind === "install"}
   <div class="fit" bind:this={fitted}>
-    <InstallConfirm info={view.data.info} onAnswer={(a) => act(view?.kind === "install" && view.data.info.kind === "script" ? answerScript(view.data.info.id, a) : host9.extInstallConfirm(a))} />
+    <InstallConfirm info={view.data.info} onAnswer={(a) => act(view?.kind === "install" && view.data.info.kind === "script" ? answerScript(view.data.info, a) : host9.extInstallConfirm(a))} />
   </div>
 {:else if view}
   <div

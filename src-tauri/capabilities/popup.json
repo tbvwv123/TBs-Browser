@@ -24,6 +24,8 @@
     "allow-script-set-enabled",
     "allow-script-open-settings",
     "allow-script-run-action",
+    "allow-store-install",
+    "allow-store-confirm",
     "allow-script-set-pinned",
     "allow-scripts-reload",
     "allow-scripts-open-folder",

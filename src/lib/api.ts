@@ -262,6 +262,7 @@ export function internalTitle(url: string): string | null {
     case "tbs://settings":
       return "설정";
   }
+  if (url === "tbs://scripts") return "찾아보기";
   if (url.startsWith("tbs://scripts/")) return "스크립트 설정";
   return null;
 }
@@ -325,6 +326,8 @@ export interface ScriptInfo {
   values: Record<string, unknown>;
   shortcuts: { id: string; name: string; keys: string }[];
   actions: { id: string; name: string }[];
+  /** 저장소에 있는 새 판 (spec 6.8) */
+  update: string | null;
 }
 
 /** 스크립트의 설정 칸 (spec 6.1 settings, 시안 N) */
@@ -388,8 +391,45 @@ export interface ExtInfo {
   error: string | null;
   /** 설치 확인에서: 이미 설치한 것을 바꾸면 그 버전 */
   updateFrom: string | null;
-  /** 사이트 스크립트를 켤 때의 확인이면 "script" */
+  /** 사이트 스크립트의 확인이면 "script" */
   kind?: "script";
+  /** 스크립트: 켜기 / 저장소에서 설치 / 업데이트 (시안 M) */
+  mode?: "enable" | "install" | "update";
+  /** 업데이트로 새로 생기는 권한 문장 */
+  newPermissions?: string[];
+  sitesChanged?: boolean;
+}
+
+// ───── 12단계: 스크립트 저장소 (spec 6.8, 시안 O) ─────
+
+export interface StoreEntry {
+  id: string;
+  name: string;
+  version: string;
+  description: string;
+  author: string;
+  matches: string[];
+  permissions: string[];
+  icon: string | null;
+  zip: string;
+  size: number;
+}
+
+export const host12 = {
+  storeList: (refresh: boolean) => invoke<StoreEntry[]>("store_list", { refresh }),
+  storeInstall: (id: string) => invoke<void>("store_install", { id }),
+  storeConfirm: (id: string, accept: boolean) => invoke<void>("store_confirm", { id, accept }),
+};
+
+/** "1.10.0" > "1.9.2" (호스트의 store::newer와 같다) */
+export function newerVersion(a: string, b: string): boolean {
+  const x = a.split(".").map((p) => parseInt(p, 10) || 0);
+  const y = b.split(".").map((p) => parseInt(p, 10) || 0);
+  for (let i = 0; i < Math.max(x.length, y.length); i++) {
+    const p = x[i] ?? 0, q = y[i] ?? 0;
+    if (p !== q) return p > q;
+  }
+  return false;
 }
 
 export const host9 = {

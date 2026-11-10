@@ -1,6 +1,9 @@
 {
   "id": "youtube-screenshot",
   "name": "유튜브 스크린샷 버튼",
+  "version": "1.0.0",
+  "description": "플레이어 아래 스크린샷 버튼",
+  "author": "TB's Browser",
   "matches": [
     "https://www.youtube.com/*"
   ],

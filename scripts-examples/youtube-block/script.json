@@ -2,6 +2,7 @@
   "id": "youtube-block",
   "name": "유튜브 사용자 차단",
   "version": "1.0.1",
+  "description": "고른 채널의 영상·댓글 숨기기",
   "author": "TB's Browser",
   "icon": "icon.svg",
   "matches": [
