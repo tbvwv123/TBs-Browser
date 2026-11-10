@@ -51,6 +51,26 @@ pub fn show_main_window(window: &tauri::Window) {
     let _ = window.set_focus();
 }
 
+/// 개발용 데스크톱에서는 창을 tao를 거치지 않고 보였기 때문에, 최소화·최대화·전체 화면으로 tao가 창 모양을 다시 쓰면
+/// 보임 표시가 빠져 작업 표시줄에서도 사라진다. 창 크기가 바뀔 때마다 활성화 없이 다시 보인다.
+#[allow(unused_variables)]
+pub fn keep_visible(window: &tauri::Window) {
+    if !quiet() {
+        return;
+    }
+    if let Ok(h) = window.hwnd() {
+        use windows::Win32::{
+            Foundation::HWND,
+            UI::WindowsAndMessaging::{IsWindowVisible, ShowWindow, SW_SHOWNA},
+        };
+        unsafe {
+            if !IsWindowVisible(HWND(h.0)).as_bool() {
+                let _ = ShowWindow(HWND(h.0), SW_SHOWNA);
+            }
+        }
+    }
+}
+
 #[cfg(not(debug_assertions))]
 pub fn start_hook(_app: &AppHandle) {}
 
