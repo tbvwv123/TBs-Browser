@@ -70,6 +70,10 @@ pub struct Info {
     pub error: Option<String>,
     /// 설치 확인에서: 같은 이름으로 이미 설치한 것을 새 버전으로 바꾸는지, 그때 지금 버전
     pub update_from: Option<String>,
+    /// "tabs" 권한이 있는지 (호환층이 지금 탭 주소를 알려 줘도 되는지)
+    pub tabs_permission: bool,
+    /// 오른쪽 클릭 메뉴(contextMenus)를 쓰는지 (호환층의 브리지를 둔다)
+    pub context_menus: bool,
 }
 
 #[derive(Default)]
@@ -92,7 +96,9 @@ fn save(app: &AppHandle) -> Result<(), String> {
     storage::save(&file(), &RecordFile { version: VERSION, items })
 }
 
+/// 확장 목록이 바뀌었다: UI에 알리고, 오른쪽 클릭 메뉴 브리지를 맞춘다
 fn emit(app: &AppHandle) {
+    crate::browser::later(app, crate::ext_compat::sync_bridges);
     let _ = app.emit_to(EventTarget::webview(UI_WEBVIEW), "extensions_changed", list(app));
     let _ = app.emit_to(EventTarget::webview(crate::popup::LABEL), "extensions_changed", list(app));
 }
@@ -160,11 +166,11 @@ fn permission_sentence(p: &str) -> Option<String> {
         match p {
             "storage" | "unlimitedStorage" => "자기 설정을 저장함",
             "alarms" => "정해진 시각에 스스로 일을 할 수 있음",
-            "contextMenus" => "오른쪽 클릭 메뉴에 항목을 더함 (이 브라우저에서는 보이지 않음)",
+            "contextMenus" => "오른쪽 클릭 메뉴에 항목을 더함",
             "declarativeNetRequest" | "declarativeNetRequestWithHostAccess" | "declarativeNetRequestFeedback" => {
                 "네트워크 요청을 막거나 바꿈 (이 브라우저에서는 동작하지 않음)"
             }
-            "tabs" => "열린 탭의 주소와 제목을 읽음 (이 브라우저에서는 일부만 동작함)",
+            "tabs" => "열린 탭의 주소와 제목을 읽음",
             "notifications" => "알림을 띄움",
             // 사이트 권한과 화면 없는 권한은 따로 보이거나 보이지 않는다
             "scripting" | "activeTab" | "offscreen" => return None,
@@ -220,6 +226,9 @@ pub fn read_manifest(dir: &Path) -> Result<Info, String> {
             }
         }
     }
+    let raw_perms: Vec<&str> = m.get("permissions").and_then(|v| v.as_array()).into_iter().flatten().filter_map(|v| v.as_str()).collect();
+    let tabs_permission = raw_perms.contains(&"tabs");
+    let context_menus = raw_perms.contains(&"contextMenus");
     let mut permissions: Vec<String> = Vec::new();
     if all_sites {
         permissions.push("모든 사이트의 내용을 읽고 바꿀 수 있음".into());
@@ -250,6 +259,8 @@ pub fn read_manifest(dir: &Path) -> Result<Info, String> {
         sites,
         permissions,
         error: (mv != 3).then(|| format!("매니페스트 버전 {mv} 확장입니다. WebView2는 버전 3(MV3) 확장만 제대로 지원합니다.")),
+        tabs_permission,
+        context_menus,
         ..Info::default()
     })
 }
@@ -418,6 +429,11 @@ pub fn start(app: &AppHandle) {
             if !path.join("manifest.json").exists() {
                 continue;
             }
+            // 호환층을 끼운다. 이미 등록된 확장을 새로 고쳤으면 껐다 켜야 반영된다
+            let patched = crate::ext_compat::patch(&path).unwrap_or_else(|e| {
+                log::warn(format!("확장 {} 호환층을 끼우지 못함: {e}", r.folder));
+                false
+            });
             let id = if installed.contains(&r.id) {
                 r.id.clone()
             } else {
@@ -434,6 +450,9 @@ pub fn start(app: &AppHandle) {
                 if let Some(x) = app.state::<ExtStore>().records.lock().unwrap().iter_mut().find(|x| x.folder == r.folder) {
                     x.id = id.clone();
                 }
+            }
+            if patched && installed.contains(&r.id) && r.enabled {
+                let _ = enable(&app, &id, false);
             }
             if let Err(e) = enable(&app, &id, r.enabled) {
                 log::warn(format!("확장 {} 켜짐 상태를 맞추지 못함: {e}", r.folder));
@@ -566,8 +585,10 @@ fn install_into(app: &AppHandle, root: &Path, info: &Info, existing: Option<Stri
             let _ = enable(app, &id, false);
             let _ = fs::remove_dir_all(&target);
             copy_dir(root, &target).map_err(|e| format!("새 버전 파일을 넣지 못했습니다({e}). 프로그램을 다시 시작한 뒤 다시 설치해 주세요."))?;
+            crate::ext_compat::patch(&target)?;
             let on = store.records.lock().unwrap().iter().find(|r| r.id == id).map(|r| r.enabled).unwrap_or(true);
             enable(app, &id, on)?;
+            reload_tabs(app, &id);
             log::info(format!("확장 업데이트: {} {}", info.name, info.version));
             return Ok(());
         }
@@ -582,7 +603,21 @@ fn install_into(app: &AppHandle, root: &Path, info: &Info, existing: Option<Stri
     }
     let target = dir().join(&folder);
     copy_dir(root, &target).map_err(|e| format!("확장 파일을 넣지 못했습니다({e}). 디스크 공간과 폴더 권한을 확인해 주세요."))?;
-    let id = match add(app, target.clone()) {
+    if let Err(e) = crate::ext_compat::patch(&target) {
+        let _ = fs::remove_dir_all(&target);
+        return Err(e);
+    }
+    // 같은 실행 중에 지운 확장을 같은 경로로 다시 등록하면 WebView2가 거절한다(접근 거부). 다른 폴더 이름으로 한 번 더 한다
+    let (folder, target, added) = match add(app, target.clone()) {
+        Ok(id) => (folder, target, Ok(id)),
+        Err(_) => {
+            let retry = format!("{folder}-{}", crate::history::now_ms() % 100000);
+            let retry_path = dir().join(&retry);
+            let r = fs::rename(&target, &retry_path).map_err(|e| e.to_string()).and_then(|_| add(app, retry_path.clone()));
+            (retry, retry_path, r)
+        }
+    };
+    let id = match added {
         Ok(id) => id,
         Err(e) => {
             let _ = fs::remove_dir_all(&target);
@@ -595,8 +630,21 @@ fn install_into(app: &AppHandle, root: &Path, info: &Info, existing: Option<Stri
     Ok(())
 }
 
+pub fn is_enabled(app: &AppHandle, id: &str) -> bool {
+    app.state::<ExtStore>().records.lock().unwrap().iter().any(|r| r.id == id && r.enabled)
+}
+
+/// 확장 페이지를 연 탭을 다시 연다 (메인 스레드에서)
+fn reload_tabs(app: &AppHandle, id: &str) {
+    let id = id.to_string();
+    crate::browser::later(app, move |a| crate::browser::reload_extension_tabs(a, &id));
+}
+
 pub fn set_enabled(app: &AppHandle, id: &str, on: bool) -> Result<(), String> {
     enable(app, id, on)?;
+    if on {
+        reload_tabs(app, id);
+    }
     if let Some(r) = app.state::<ExtStore>().records.lock().unwrap().iter_mut().find(|r| r.id == id) {
         r.enabled = on;
     }
@@ -719,7 +767,7 @@ mod tests {
         assert!(!i.all_sites);
         assert_eq!(
             i.permissions,
-            vec!["자기 설정을 저장함", "정해진 시각에 스스로 일을 할 수 있음", "오른쪽 클릭 메뉴에 항목을 더함 (이 브라우저에서는 보이지 않음)"]
+            vec!["자기 설정을 저장함", "정해진 시각에 스스로 일을 할 수 있음", "오른쪽 클릭 메뉴에 항목을 더함"]
         );
         assert!(i.error.is_none());
     }

@@ -181,6 +181,17 @@ fn hook_loop(app: AppHandle, dir: std::path::PathBuf) {
                 }
                 Err(e) => format!("ERR {e}"),
             },
+            // 확장 오른쪽 클릭 항목을 누른 것처럼: "ctxclick <확장 ID> <JSON info>" (네이티브 메뉴는 누를 수 없어서)
+            ("ctxclick", _) => {
+                let info: serde_json::Value = serde_json::from_str(&rest).unwrap_or_default();
+                let page = info.get("pageUrl").and_then(|v| v.as_str()).unwrap_or_default().to_string();
+                let (a, ext) = (app.clone(), label.to_string());
+                let _ = app.run_on_main_thread(move || {
+                    crate::ext_compat::send_click(&a, &ext, info, page, String::new());
+                    let _ = tx.send("sent".into());
+                });
+                rx.recv_timeout(Duration::from_secs(5)).unwrap_or_else(|_| "timeout".into())
+            }
             // 업데이트 시험: "update" → 확인해 둔 새 버전을 내려받아 서명을 검사한다 (설치하지 않는다)
             ("update", _) => tauri::async_runtime::block_on(crate::updater::dev_download(&app)),
             // DevTools 명령을 그대로 보낸다: "cdp <label> <method> <json>"

@@ -55,6 +55,8 @@ thread_local! {
     static DOWNLOAD_TOKENS: RefCell<HashMap<TabId, i64>> = RefCell::new(HashMap::new());
     /// 탭마다 건 리소스 바꿔치기 처리기 토큰 (spec 6.2)
     static OVERRIDE_TOKENS: RefCell<HashMap<TabId, i64>> = RefCell::new(HashMap::new());
+    /// 확장 페이지를 다시 연 때 (같은 탭에서 되풀이하지 않게)
+    static RELOADED: RefCell<HashMap<TabId, std::time::Instant>> = RefCell::new(HashMap::new());
 }
 
 /// WebView2 이벤트 처리기가 끝난 뒤 메인 스레드에서 `f`를 돌린다.
@@ -65,6 +67,11 @@ pub fn later(app: &AppHandle, f: impl FnOnce(&AppHandle) + Send + 'static) {
         let app2 = app.clone();
         let _ = app.run_on_main_thread(move || f(&app2));
     });
+}
+
+/// 모든 웹뷰가 같이 쓰는 WebView2 환경 (메인 스레드에서만)
+pub fn environment() -> Option<ICoreWebView2Environment> {
+    ENV.with(|e| e.borrow().clone())
 }
 
 pub fn remember_environment(env: ICoreWebView2Environment) {
@@ -655,18 +662,23 @@ fn on_event(app: &AppHandle, id: TabId, ev: Event) {
         Event::Shortcut(name) => return later(app, move |a| shortcuts::run(a, name)),
         Event::Message(source, text) => {
             if let Some(c) = core(id) {
-                site_scripts::handle_message(app, &c, &source, &text);
+                // 탭에 연 확장 페이지(설정 등)의 호환 메시지 (spec 6.6)
+                if !crate::ext_compat::handle_message(app, &c, &source, &text) {
+                    site_scripts::handle_message(app, &c, &source, &text);
+                }
             }
             return;
         }
+        // 확장이 만든 오른쪽 클릭 메뉴 항목을 넣는다 (spec 6.6)
+        Event::ContextMenu(args) => return crate::ext_compat::extend_menu(app, id, &args),
         Event::Completed(ok) => {
             if ok {
                 record_visit(app, id);
             }
             return;
         }
-        // 확장을 끄거나 지우면 WebView2가 그 확장의 페이지를 자기 빈 페이지로 보낸다. 우리 새 탭 화면으로 바꾼다.
-        Event::Url(u, _) if u.starts_with("chrome-search://") => return later(app, move |a| to_blank(a, id)),
+        // 확장을 끄거나 바꾸면 WebView2가 그 확장의 페이지를 자기 빈 페이지로 보낸다. 그 페이지를 다시 연다.
+        Event::Url(u, _) if u.starts_with("chrome-search://") => return later(app, move |a| extension_page_lost(a, id)),
         Event::FullScreen(on) => return later(app, move |a| set_page_fullscreen(a, id, on)),
         Event::Permission { uri, kind, args } => return permissions::request(app, id, &uri, kind, args),
         Event::GotFocus => {
@@ -730,6 +742,44 @@ fn on_event(app: &AppHandle, id: TabId, ev: Event) {
             if vurl == url {
                 let _ = app.state::<History>().set_title(vid, &title);
             }
+        }
+    }
+}
+
+/// 확장 페이지를 연 탭이 WebView2의 빈 페이지로 넘어갔다 (확장을 껐거나, 업데이트하며 껐다 켰다).
+/// 확장이 켜져 있으면 그 페이지를 다시 연다. 꺼져 있으면 주소를 남긴 채 웹뷰만 닫고, 다시 켤 때 연다.
+fn extension_page_lost(app: &AppHandle, id: TabId) {
+    let url = browser(app).tabs.lock().unwrap().get(id).map(|t| t.url.clone()).unwrap_or_default();
+    let Some(ext) = url.strip_prefix("chrome-extension://").and_then(|r| r.split('/').next()).map(str::to_string) else {
+        return to_blank(app, id);
+    };
+    let recent = RELOADED.with(|r| r.borrow().get(&id).is_some_and(|t| t.elapsed() < std::time::Duration::from_secs(5)));
+    if crate::extensions::is_enabled(app, &ext) && !recent {
+        RELOADED.with(|r| r.borrow_mut().insert(id, std::time::Instant::now()));
+        if let (Some(c), Ok(_)) = (core(id), Url::parse(&url)) {
+            let _ = unsafe { c.Navigate(&windows::core::HSTRING::from(url.as_str())) };
+        }
+        return;
+    }
+    drop_webview(app, id);
+    if let Some(t) = browser(app).tabs.lock().unwrap().get_mut(id) {
+        t.loading = false;
+    }
+    layout(app);
+    emit_tab(app, id);
+}
+
+/// 확장을 다시 켜거나 새로 설치했다. 그 확장의 페이지를 연 탭을 다시 연다 (지금 보는 탭만 바로, 나머지는 누를 때)
+pub fn reload_extension_tabs(app: &AppHandle, ext: &str) {
+    let prefix = format!("chrome-extension://{ext}/");
+    let snap = snapshot(app);
+    for t in snap.tabs.iter().filter(|t| t.url.starts_with(&prefix)) {
+        match core(t.id) {
+            Some(c) => {
+                let _ = unsafe { c.Navigate(&windows::core::HSTRING::from(t.url.as_str())) };
+            }
+            None if Some(t.id) == snap.active => load_if_needed(app, t.id),
+            None => {}
         }
     }
 }

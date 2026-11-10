@@ -24,6 +24,8 @@ static THEME: Mutex<String> = Mutex::new(String::new());
 
 /// 지금 떠 있는 팝업의 자리 (메인 창 안쪽 논리 좌표 x, y, 폭, 높이)
 static RECT: Mutex<(f64, f64, f64, f64)> = Mutex::new((0.0, 0.0, 0.0, 0.0));
+/// 아래 끝을 맞춰 띄운 팝업(확장 패널)의 아래 끝. 높이를 맞출 때 이 자리를 지킨다
+static BOTTOM: Mutex<f64> = Mutex::new(0.0);
 
 /// 지금 떠 있는 팝업의 종류 ("suggest" | "downloads" | "menu" | "bookmarks")
 static KIND: Mutex<Option<String>> = Mutex::new(None);
@@ -61,6 +63,7 @@ pub fn show(app: &AppHandle, kind: &str, x: f64, y: f64, w: f64, h: f64, data: V
     let _ = popup.set_position(LogicalPosition::new(origin.x + x - MARGIN, origin.y + y));
     let _ = popup.set_size(LogicalSize::new(w + MARGIN * 2.0, h + MARGIN));
     *RECT.lock().unwrap() = (x, y, w, h);
+    *BOTTOM.lock().unwrap() = y + h;
     if let Some(t) = data.get("theme").and_then(|t| t.as_str()) {
         *THEME.lock().unwrap() = t.to_string();
     }
@@ -75,8 +78,6 @@ pub fn show(app: &AppHandle, kind: &str, x: f64, y: f64, w: f64, h: f64, data: V
 }
 
 pub fn hide(app: &AppHandle) {
-    // 확장 팝업도 같이 닫는다 (UI를 누르거나 창을 옮길 때)
-    close_extension(app);
     if KIND.lock().unwrap().take().is_none() {
         return;
     }
@@ -92,13 +93,13 @@ pub fn hide(app: &AppHandle) {
 pub fn fit(app: &AppHandle, h: f64) {
     let (Some(popup), Some(main)) = (app.get_webview_window(LABEL), app.get_window(crate::browser::MAIN_WINDOW)) else { return };
     let Some(kind) = KIND.lock().unwrap().clone() else { return };
-    let (x, y, w, old_h) = *RECT.lock().unwrap();
+    let (x, y, w, _) = *RECT.lock().unwrap();
     let scale = main.scale_factor().unwrap_or(1.0);
     let Ok(origin) = main.inner_position() else { return };
     let origin = origin.to_logical::<f64>(scale);
     let win_h = main.inner_size().map(|s| s.to_logical::<f64>(scale).height).unwrap_or(800.0);
     let h = h.clamp(40.0, (win_h - 16.0).max(40.0));
-    let y = if kind == "extensions" { (y + old_h - h).max(8.0) } else { y };
+    let y = if kind == "extensions" { (*BOTTOM.lock().unwrap() - h).max(8.0) } else { y };
     let _ = popup.set_position(LogicalPosition::new(origin.x + x - MARGIN, origin.y + y));
     let _ = popup.set_size(LogicalSize::new(w + MARGIN * 2.0, h + MARGIN));
     *RECT.lock().unwrap() = (x, y, w, h);
@@ -168,11 +169,25 @@ pub fn show_extension(app: &AppHandle, url: tauri::Url, x: f64, bottom: f64) -> 
             let _ = ShowWindow(HWND(h.0), if crate::dev::quiet() { SW_SHOWNOACTIVATE } else { windows::Win32::UI::WindowsAndMessaging::SW_SHOW });
         }
     }
-    let app3 = app.clone();
-    w.on_window_event(move |e| {
-        if let tauri::WindowEvent::Focused(false) = e {
-            crate::browser::later(&app3, close_extension);
+    if !crate::dev::quiet() {
+        let _ = w.set_focus();
+    }
+    // 팝업 페이지가 "지금 탭"을 물으면 답한다 (spec 6.6 호환층)
+    let app4 = app.clone();
+    let _ = w.with_webview(move |p| {
+        if let Ok(core) = unsafe { p.controller().CoreWebView2() } {
+            crate::ext_compat::listen(&app4, &core);
         }
+    });
+    // 한 번 포커스를 받은 뒤에 잃으면 닫는다. 만들어지는 동안의 포커스 변화로 바로 닫히지 않게 한다.
+    let app3 = app.clone();
+    let was_focused = std::sync::atomic::AtomicBool::new(false);
+    w.on_window_event(move |e| match e {
+        tauri::WindowEvent::Focused(true) => was_focused.store(true, std::sync::atomic::Ordering::Relaxed),
+        tauri::WindowEvent::Focused(false) if was_focused.load(std::sync::atomic::Ordering::Relaxed) => {
+            crate::browser::later(&app3, close_extension)
+        }
+        _ => {}
     });
     Ok(())
 }

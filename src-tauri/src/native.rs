@@ -39,6 +39,8 @@ pub enum Event {
     Permission { uri: String, kind: &'static str, args: ICoreWebView2PermissionRequestedEventArgs },
     /// 페이지가 포커스를 받았다 (페이지를 눌렀다). 떠 있는 팝업을 닫는다.
     GotFocus,
+    /// 오른쪽 클릭 메뉴를 띄우려 한다. 확장 항목을 더할 수 있다 (처리기 안에서 바로 고친다)
+    ContextMenu(ICoreWebView2ContextMenuRequestedEventArgs),
 }
 
 #[derive(Clone, Copy)]
@@ -57,6 +59,7 @@ enum Kind {
     FullScreen,
     Permission,
     GotFocus,
+    ContextMenu,
 }
 
 /// 웹뷰 하나에 건 처리기들. 웹뷰를 닫기 전에 `unhook`으로 뗀다 (spec 7장).
@@ -319,6 +322,20 @@ pub fn hook(controller: &ICoreWebView2Controller, core: &ICoreWebView2, sink: Rc
             &mut t,
         )?;
         tokens.push((Kind::GotFocus, t));
+
+        if let Ok(c11) = core.cast::<ICoreWebView2_11>() {
+            let s = sink.clone();
+            c11.add_ContextMenuRequested(
+                &ContextMenuRequestedEventHandler::create(Box::new(move |_, args| {
+                    if let Some(a) = args {
+                        s(Event::ContextMenu(a));
+                    }
+                    Ok(())
+                })),
+                &mut t,
+            )?;
+            tokens.push((Kind::ContextMenu, t));
+        }
     }
     Ok(Hooks { core: core.clone(), controller: controller.clone(), tokens })
 }
@@ -386,6 +403,7 @@ pub fn unhook(h: &Hooks) {
                 Kind::FullScreen => h.core.remove_ContainsFullScreenElementChanged(t),
                 Kind::Permission => h.core.remove_PermissionRequested(t),
                 Kind::GotFocus => h.controller.remove_GotFocus(t),
+                Kind::ContextMenu => h.core.cast::<ICoreWebView2_11>().and_then(|c| c.remove_ContextMenuRequested(t)),
             };
         }
     }

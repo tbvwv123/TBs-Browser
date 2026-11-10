@@ -6,6 +6,7 @@ mod browser;
 mod dev;
 mod downloads;
 mod examples;
+mod ext_compat;
 mod extensions;
 mod frame;
 mod history;
@@ -703,7 +704,10 @@ fn main() {
                     // 다른 창으로 가면 주소창이 포커스를 잃으면서 UI가 닫는다.
                     if matches!(e, tauri::WindowEvent::Moved(_) | tauri::WindowEvent::Resized(_)) {
                         let h2 = h.clone();
-                        let _ = h.run_on_main_thread(move || popup::hide(&h2));
+                        let _ = h.run_on_main_thread(move || {
+                            popup::hide(&h2);
+                            popup::close_extension(&h2);
+                        });
                     }
                     if let tauri::WindowEvent::Resized(_) = e {
                         let _ = h.emit_to(EventTarget::webview(UI_WEBVIEW), "window_maximized", w2.is_maximized().unwrap_or(false));
