@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-group-ungroup"
+description = "Enables the group_ungroup command without any pre-configured scope."
+commands.allow = ["group_ungroup"]
+
+[[permission]]
+identifier = "deny-group-ungroup"
+description = "Denies the group_ungroup command without any pre-configured scope."
+commands.deny = ["group_ungroup"]

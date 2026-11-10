@@ -1,0 +1,19 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "ui-only",
+  "description": "UI 웹뷰에만 명령을 허용한다. windows가 아니라 webviews로 범위를 잡아 콘텐츠 웹뷰는 빠진다.",
+  "webviews": ["ui"],
+  "permissions": [
+    "allow-s0-ping",
+    "allow-set-content-bounds",
+    "allow-show-tab",
+    "allow-ui-log",
+    "core:window:allow-start-dragging",
+    "core:window:allow-internal-toggle-maximize",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-minimize",
+    "core:window:allow-close",
+    "core:window:allow-start-resize-dragging",
+    "core:event:default"
+  ]
+}

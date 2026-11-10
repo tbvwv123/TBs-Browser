@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-tab-open-url"
+description = "Enables the tab_open_url command without any pre-configured scope."
+commands.allow = ["tab_open_url"]
+
+[[permission]]
+identifier = "deny-tab-open-url"
+description = "Denies the tab_open_url command without any pre-configured scope."
+commands.deny = ["tab_open_url"]

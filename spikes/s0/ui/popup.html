@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+  html, body { margin: 0; height: 100%; background: transparent; font: 13px "Segoe UI", sans-serif; overflow: hidden; }
+  /* 팝업 창(투명 최상위 창) 시험일 때는 그림자를 안쪽 여백에 그린다 */
+  .menu { position: absolute; inset: 16px; background: #fff; border-radius: 10px;
+          box-shadow: 0 0 0 1px rgba(0,0,0,.06), 0 8px 24px rgba(0,0,0,.16); padding: 4px; }
+  body.flat .menu { inset: 0; box-shadow: none; border-radius: 0; }
+  .item { height: 32px; line-height: 32px; padding: 0 12px; border-radius: 6px; }
+  .item:hover { background: rgba(0,0,0,.06); }
+</style>
+</head>
+<body>
+  <div class="menu">
+    <div class="item">자동완성 1 — 콘텐츠 위에 뜬 팝업</div>
+    <div class="item">자동완성 2</div>
+    <div class="item">자동완성 3</div>
+  </div>
+<script>
+  if (location.hash === '#flat') document.body.classList.add('flat');
+</script>
+</body>
+</html>

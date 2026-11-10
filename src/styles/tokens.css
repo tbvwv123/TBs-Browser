@@ -1,0 +1,196 @@
+/*
+ * 디자인 값은 이 파일 한 곳에만 적는다 (spec 11장 3번).
+ * 기준: spec 4.2(치수), 4.3(색), design/Main.dc.html(시안 F · 라이트), H(접힘), I(새 탭).
+ * 다크 테마(시안 G, J)는 맨 아래 [data-theme="dark"]에서 같은 이름의 색만 바꾼다.
+ */
+:root {
+  /* 글꼴 */
+  --font-family: "Inter", "Noto Sans KR", system-ui, sans-serif;
+  --font-size: 13px;
+  --line-height: 1.4;
+  --icon-stroke: 1.8;
+
+  /* 창 */
+  --window-padding: 8px;
+  --window-bg: linear-gradient(165deg, #ffffff 0%, #f1f1f1 45%, #dadada 100%);
+
+  /* 글자와 아이콘 */
+  --fg: #111111;
+  --fg-muted: #4d4d4d;
+  --fg-disabled: #6e6e6e; /* 시안 F의 "앞으로" 버튼 */
+  --fg-bookmark: #333333;
+  --fg-sidebar-button: #333333; /* 사이드바 맨 아래 줄 버튼 */
+
+  /* 면 */
+  --field-bg: #e6e6e6; /* 주소창, 탭 검색 칸 */
+  --divider: #d0d0d0;
+  --hover-bg: rgba(0, 0, 0, 0.06);
+  --tab-active-bg: #ffffff;
+  --tab-active-shadow: 0 1px 3px rgba(0, 0, 0, 0.14);
+  --scrollbar: #c2c2c2;
+  --spinner-track: #c8c8c8;
+  --spinner-head: #111111;
+  --ring-track: #cfcfcf; /* 다운로드 진행 고리 바탕 (시안 F) */
+  --favicon-empty: #8a8a8a; /* 파비콘이 없는 탭의 빈 사각형 (시안 I의 "새 탭") */
+
+  /* 페이지 카드 */
+  --card-bg: #ffffff;
+  --card-radius: 12px; /* 0으로 바꾸면 각진 모서리 (spec 3장 배치) */
+  --card-shadow: 0 0 0 1px rgba(0, 0, 0, 0.04), 0 2px 4px rgba(0, 0, 0, 0.06), 0 12px 28px rgba(0, 0, 0, 0.1);
+
+  /* 메뉴 팝업 */
+  --menu-bg: #ffffff;
+  --menu-shadow: 0 0 0 1px rgba(0, 0, 0, 0.06), 0 8px 24px rgba(0, 0, 0, 0.16);
+  --menu-width: 200px;
+  --menu-radius: 10px;
+  --menu-item-height: 32px;
+  --menu-item-radius: 6px;
+
+  /* 사이드바 */
+  --sidebar-width: 260px;
+  --sidebar-collapsed-width: 44px;
+  --sidebar-padding: 0 10px 4px 4px;
+  --sidebar-gap: 8px;
+  --top-row-height: 34px;
+  --search-height: 28px;
+  --search-radius: 8px;
+  --search-font-size: 12px;
+  --section-title-height: 26px;
+  --section-title-font-size: 12px;
+  --section-title-weight: 600;
+  --tab-row-height: 34px;
+  --tab-row-radius: 8px;
+  --tab-row-gap: 2px;
+  --tab-row-padding: 0 10px;
+  --tab-row-icon-gap: 10px;
+  --tab-active-weight: 600;
+  --favicon-size: 16px;
+  --tab-close-width: 32px;
+  --tab-close-icon: 12px;
+  --nested-indent: 26px;
+  --bookmark-row-height: 28px;
+  --bookmark-row-radius: 7px;
+  --bookmark-font-size: 12px;
+  --bookmark-icon-size: 14px;
+  --bookmark-icon-gap: 9px;
+  --section-button-size: 26px; /* 북마크 머리줄의 추가 버튼 */
+  /* 붙는 머리줄: "탭" 제목 26 + "새 탭" 줄 34 + 선 1. 그룹 이름 줄은 이 아래에 붙는다 */
+  --tabs-head-height: 61px;
+  --scrollbar-width: 4px;
+  --scrollbar-radius: 2px;
+  --drop-line: #111111; /* 끌어 옮길 때 놓을 자리 선 */
+  --divider-margin: 6px;
+  --bottom-row-height: 34px;
+  --bottom-button-size: 32px;
+  --update-dot-size: 6px; /* 새 버전이 있을 때 점 3개 버튼 위의 점 (spec 5.7) */
+  --update-dot-offset: 5px;
+
+  /* 상단 툴바 */
+  --toolbar-gap: 4px;
+  --icon-button-size: 30px;
+  --icon-button-radius: 8px;
+  --address-height: 34px;
+  --address-radius: 17px;
+  --address-max-width: 640px;
+  --address-margin: 0 8px;
+  --address-padding-left: 14px;
+  --address-icon-gap: 8px;
+  --address-star-width: 36px;
+  --window-button-width: 40px;
+  --window-button-height: 30px;
+  --window-button-radius: 6px;
+  --window-button-icon: 10px;
+  --main-gap: 8px;
+
+  /* 접힌 사이드바 (spec 4.6, 시안 H) */
+  --collapsed-gap: 4px;
+  --collapsed-button-width: 36px;
+  --collapsed-button-height: 34px;
+  --collapsed-divider-width: 20px;
+  --collapsed-group-width: 40px;
+  --collapsed-group-radius: 10px;
+  --collapsed-group-bg: rgba(0, 0, 0, 0.07);
+  --collapsed-margin-right: 8px;
+  --collapsed-list-padding: 3px 0 4px;
+  --collapsed-group-padding: 3px 0;
+  --collapsed-group-toggle-height: 20px; /* 그룹 맨 위 접기·펼치기 화살표 (시안에 없어 펼친 사이드바의 그룹 화살표를 줄여 쓴다) */
+  --collapsed-audio-dot: 8px; /* 소리 나는 탭의 파비콘 오른쪽 아래 점 */
+  --collapsed-audio-dot-offset: 5px;
+  --collapsed-audio-dot-border: 2px solid #f1f1f1; /* 창 바탕 가운데 색으로 테를 둘러 파비콘과 떼어 놓는다 */
+  --bookmarks-popup-width: 260px; /* 접힌 상태의 북마크 목록 (펼친 사이드바 폭과 같게) */
+
+  /* 새 탭 화면 (spec 4.7, 시안 I) */
+  --newtab-padding: 32px 32px 104px; /* 아래를 더 띄워 가운데보다 살짝 위에 놓는다 */
+  --newtab-gap: 36px;
+  --newtab-search-height: 52px;
+  --newtab-search-radius: 26px;
+  --newtab-search-padding: 0 20px;
+  --newtab-search-font-size: 15px;
+  --newtab-search-icon-gap: 12px;
+  --newtab-search-bg: #f1f1f1;
+  --newtab-grid-max-width: 440px;
+  --newtab-grid-gap: 8px;
+  --newtab-item-padding: 14px 4px 12px;
+  --newtab-item-radius: 12px;
+  --newtab-item-gap: 8px;
+  --newtab-icon-box: 44px;
+  --newtab-icon-radius: 12px;
+  --newtab-icon-size: 20px;
+  --newtab-icon-bg: #f4f4f4;
+  --newtab-label-size: 12px;
+
+  /* 권한 요청 줄 (spec 5.5). 툴바와 페이지 카드 사이에 메뉴 팝업과 같은 모양으로 뜬다 */
+  --prompt-height: 44px;
+  --prompt-padding: 0 8px 0 14px;
+  --prompt-gap: 8px;
+  --prompt-button-height: 30px;
+  --prompt-button-padding: 0 12px;
+  --prompt-primary-bg: #111111;
+  --prompt-primary-fg: #ffffff;
+
+  /* 내부 페이지 (방문 기록, 다운로드, 설정) */
+  --page-padding: 40px 48px;
+  --page-max-width: 760px;
+  --page-title-size: 22px;
+  --page-row-height: 40px;
+}
+
+/* ───────────── 다크 테마 (spec 4.3 다크 열, 시안 G·J) ───────────── */
+[data-theme="dark"] {
+  color-scheme: dark;
+  --window-bg: linear-gradient(165deg, #333333 0%, #1a1a1a 45%, #080808 100%);
+
+  --fg: #f4f4f4;
+  --fg-muted: #b8b8b8;
+  --fg-disabled: #9a9a9a; /* 시안 J의 "앞으로" 버튼 */
+  --fg-bookmark: #d2d2d2;
+  --fg-sidebar-button: #d2d2d2;
+
+  --field-bg: #0e0e0e;
+  --divider: #3e3e3e;
+  --hover-bg: rgba(255, 255, 255, 0.08);
+  --tab-active-bg: #3c3c3c;
+  --tab-active-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
+  --scrollbar: #5a5a5a;
+  --spinner-track: #555555;
+  --spinner-head: #f4f4f4;
+  --ring-track: #4a4a4a;
+  --favicon-empty: #a0a0a0;
+  --drop-line: #f4f4f4;
+
+  --card-bg: #1c1c1c;
+  --card-shadow: 0 2px 6px rgba(0, 0, 0, 0.4), 0 16px 36px rgba(0, 0, 0, 0.45);
+
+  --menu-bg: #2a2a2a;
+  --menu-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08), 0 10px 28px rgba(0, 0, 0, 0.6);
+
+  /* 접힌 상태의 다크 시안은 없다. G의 색을 H의 구조에 쓴다 (spec 4 머리말). 그룹 바탕은 마우스를 올렸을 때 색과 같은 흰빛으로 */
+  --collapsed-group-bg: rgba(255, 255, 255, 0.07);
+  --collapsed-audio-dot-border: 2px solid #1a1a1a;
+
+  --newtab-search-bg: #2a2a2a;
+  --newtab-icon-bg: #2a2a2a;
+
+  --prompt-primary-bg: #f4f4f4;
+  --prompt-primary-fg: #111111;
+}

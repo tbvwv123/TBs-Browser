@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>S0 UI</title>
+<style>
+  /* 0단계 시험용 화면. 시안 구현이 아니다. */
+  html, body { margin: 0; height: 100%; overflow: hidden; font: 13px "Segoe UI", sans-serif; color: #111; }
+  body { background: linear-gradient(165deg, #FFFFFF 0%, #F1F1F1 45%, #DADADA 100%); display: grid;
+         grid-template-columns: 260px 1fr; grid-template-rows: 34px 1fr; gap: 8px; padding: 8px; box-sizing: border-box; }
+  #side { grid-row: 1 / 3; display: flex; flex-direction: column; gap: 4px; }
+  #side button { height: 30px; border: 0; border-radius: 8px; background: #E6E6E6; text-align: left; padding: 0 10px; }
+  #side button.on { background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.14); }
+  #bar { display: flex; align-items: center; }
+  #drag { flex: 1; height: 100%; display: flex; align-items: center; color: #4D4D4D; padding-left: 6px; }
+  .wb { width: 40px; height: 30px; border: 0; background: transparent; font-size: 12px; }
+  .wb:hover { background: rgba(0,0,0,.06); }
+  #close:hover { background: #E81123; color: #fff; }
+  #card { border-radius: 12px; background: #fff;
+          box-shadow: 0 0 0 1px rgba(0,0,0,.04), 0 2px 4px rgba(0,0,0,.06), 0 12px 28px rgba(0,0,0,.1);
+          display: flex; align-items: center; justify-content: center; color: #999; }
+  #log { font: 11px Consolas, monospace; color: #4D4D4D; white-space: pre-wrap; overflow: auto; flex: 1; margin-top: 8px; }
+</style>
+</head>
+<body>
+  <div id="side">
+    <button id="t1" class="on">탭 1 (콘텐츠 웹뷰 c1)</button>
+    <button id="t2">탭 2 (콘텐츠 웹뷰 c2)</button>
+    <button id="ping">UI → 호스트 명령 시험</button>
+    <div id="log"></div>
+  </div>
+  <div id="bar">
+    <div id="drag" data-tauri-drag-region>TB's Browser · 0단계 기술 검증 (이 빈 곳을 끌어 창 이동, 더블클릭 최대화)</div>
+    <button class="wb" id="min">—</button>
+    <button class="wb" id="max">☐</button>
+    <button class="wb" id="close">✕</button>
+  </div>
+  <div id="card">콘텐츠 웹뷰가 이 자리에 놓인다</div>
+<script>
+  const T = window.__TAURI__;
+  const invoke = T.core.invoke;
+  const win = T.window.getCurrentWindow();
+  const log = (s) => { document.getElementById('log').textContent += s + '\n'; };
+
+  function sendBounds() {
+    const r = document.getElementById('card').getBoundingClientRect();
+    invoke('set_content_bounds', { x: r.left, y: r.top, w: r.width, h: r.height }).catch(e => log('bounds 오류: ' + e));
+  }
+  new ResizeObserver(sendBounds).observe(document.getElementById('card'));
+  window.addEventListener('resize', sendBounds);
+
+  function show(label) {
+    invoke('show_tab', { label }).catch(e => log('show 오류: ' + e));
+    document.getElementById('t1').classList.toggle('on', label === 'c1');
+    document.getElementById('t2').classList.toggle('on', label === 'c2');
+  }
+  document.getElementById('t1').onclick = () => show('c1');
+  document.getElementById('t2').onclick = () => show('c2');
+  document.getElementById('ping').onclick = () => invoke('s0_ping').then(v => log('ping: ' + v), e => log('ping 오류: ' + e));
+  document.getElementById('min').onclick = () => win.minimize();
+  document.getElementById('max').onclick = () => win.toggleMaximize();
+  document.getElementById('close').onclick = () => win.close();
+
+  // 단축키가 UI 웹뷰에서 눌린 경우 (포커스가 UI에 있을 때)
+  window.addEventListener('keydown', (e) => {
+    if (e.ctrlKey || e.altKey || e.key.startsWith('F')) invoke('ui_log', { msg: `ui-keydown ${e.ctrlKey ? 'Ctrl+' : ''}${e.shiftKey ? 'Shift+' : ''}${e.altKey ? 'Alt+' : ''}${e.key}` });
+  });
+  T.event.listen('s0-log', (e) => log(e.payload));
+  sendBounds();
+</script>
+</body>
+</html>

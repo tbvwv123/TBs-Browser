@@ -1,0 +1,16 @@
+{
+  "id": "chess-pieces",
+  "name": "체스닷컴 기물 바꾸기",
+  "matches": [
+    "https://www.chess.com/*"
+  ],
+  "run_at": "document_start",
+  "js": [],
+  "css": [
+    "style.css"
+  ],
+  "resource_overrides": [],
+  "permissions": [],
+  "enabled": true,
+  "pinned": false
+}

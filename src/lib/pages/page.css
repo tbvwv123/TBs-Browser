@@ -1,0 +1,87 @@
+/* 내부 페이지 공통 모양 (방문 기록, 다운로드, 설정). 값은 tokens.css에서 온다. */
+.page {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  padding: var(--page-padding);
+  user-select: text;
+}
+.page-inner {
+  max-width: var(--page-max-width);
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.page-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.page-title {
+  margin: 0;
+  flex: 1;
+  font-size: var(--page-title-size);
+  font-weight: 600;
+}
+.page-field {
+  height: var(--search-height);
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--search-radius);
+  background: var(--field-bg);
+  outline: none;
+  font-size: var(--search-font-size);
+}
+.page-button {
+  height: var(--search-height);
+  padding: 0 12px;
+  border-radius: var(--search-radius);
+  background: var(--field-bg);
+  font-size: var(--search-font-size);
+  white-space: nowrap;
+}
+.page-button:hover:not(:disabled) {
+  background: var(--divider);
+}
+.page-button:disabled {
+  color: var(--fg-disabled);
+  cursor: default;
+}
+.page-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.page-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: var(--page-row-height);
+  padding: 0 10px;
+  border-radius: var(--tab-row-radius);
+}
+.page-row:hover {
+  background: var(--hover-bg);
+}
+.page-muted {
+  color: var(--fg-muted);
+  font-size: var(--search-font-size);
+}
+.page-ellipsis {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.page-section-title {
+  margin: 12px 0 0;
+  font-size: var(--section-title-font-size);
+  font-weight: var(--section-title-weight);
+  color: var(--fg-muted);
+}
+.page-empty {
+  margin: 40px 0;
+  text-align: center;
+  color: var(--fg-muted);
+}

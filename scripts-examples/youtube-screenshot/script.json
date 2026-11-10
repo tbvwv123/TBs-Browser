@@ -1,0 +1,21 @@
+{
+  "id": "youtube-screenshot",
+  "name": "유튜브 스크린샷 버튼",
+  "matches": [
+    "https://www.youtube.com/*"
+  ],
+  "run_at": "document_end",
+  "js": [
+    "main.js"
+  ],
+  "css": [
+    "style.css"
+  ],
+  "resource_overrides": [],
+  "permissions": [
+    "saveFile",
+    "screenshot"
+  ],
+  "enabled": true,
+  "pinned": true
+}

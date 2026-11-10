@@ -1,0 +1,47 @@
+/* 글꼴은 앱 안에 넣는다 (외부 요청 없이). 시안 F가 쓰는 굵기만. */
+@import "@fontsource/inter/400.css";
+@import "@fontsource/inter/500.css";
+@import "@fontsource/inter/600.css";
+@import "@fontsource/noto-sans-kr/400.css";
+@import "@fontsource/noto-sans-kr/500.css";
+@import "@fontsource/noto-sans-kr/700.css";
+@import "./tokens.css";
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  background: var(--window-bg);
+  color: var(--fg);
+  font-family: var(--font-family);
+  font-size: var(--font-size);
+  line-height: var(--line-height);
+  user-select: none;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  text-align: left;
+}
+
+input {
+  font: inherit;
+  color: inherit;
+}

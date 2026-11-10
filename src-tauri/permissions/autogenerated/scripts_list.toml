@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-scripts-list"
+description = "Enables the scripts_list command without any pre-configured scope."
+commands.allow = ["scripts_list"]
+
+[[permission]]
+identifier = "deny-scripts-list"
+description = "Denies the scripts_list command without any pre-configured scope."
+commands.deny = ["scripts_list"]

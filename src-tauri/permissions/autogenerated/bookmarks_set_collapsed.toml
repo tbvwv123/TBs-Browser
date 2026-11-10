@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-bookmarks-set-collapsed"
+description = "Enables the bookmarks_set_collapsed command without any pre-configured scope."
+commands.allow = ["bookmarks_set_collapsed"]
+
+[[permission]]
+identifier = "deny-bookmarks-set-collapsed"
+description = "Denies the bookmarks_set_collapsed command without any pre-configured scope."
+commands.deny = ["bookmarks_set_collapsed"]

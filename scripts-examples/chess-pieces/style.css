@@ -1,0 +1,14 @@
+/* 체스닷컴의 기물(.piece.wp 등)을 이 폴더의 pieces 그림으로 바꾼다 (spec 6.5).
+   스타일 덮어쓰기 방식이다. 아래 url(...)의 파일은 브라우저가 데이터로 바꿔 넣는다. */
+.piece.wk, .promotion-piece.wk { background-image: url("tbs-file:pieces/wk.svg") !important; }
+.piece.wq, .promotion-piece.wq { background-image: url("tbs-file:pieces/wq.svg") !important; }
+.piece.wr, .promotion-piece.wr { background-image: url("tbs-file:pieces/wr.svg") !important; }
+.piece.wb, .promotion-piece.wb { background-image: url("tbs-file:pieces/wb.svg") !important; }
+.piece.wn, .promotion-piece.wn { background-image: url("tbs-file:pieces/wn.svg") !important; }
+.piece.wp, .promotion-piece.wp { background-image: url("tbs-file:pieces/wp.svg") !important; }
+.piece.bk, .promotion-piece.bk { background-image: url("tbs-file:pieces/bk.svg") !important; }
+.piece.bq, .promotion-piece.bq { background-image: url("tbs-file:pieces/bq.svg") !important; }
+.piece.br, .promotion-piece.br { background-image: url("tbs-file:pieces/br.svg") !important; }
+.piece.bb, .promotion-piece.bb { background-image: url("tbs-file:pieces/bb.svg") !important; }
+.piece.bn, .promotion-piece.bn { background-image: url("tbs-file:pieces/bn.svg") !important; }
+.piece.bp, .promotion-piece.bp { background-image: url("tbs-file:pieces/bp.svg") !important; }

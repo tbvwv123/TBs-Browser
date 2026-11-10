@@ -1,0 +1,16 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "popup-only",
+  "description": "콘텐츠 위에 뜨는 팝업 창(자동완성, 다운로드 목록, 메뉴, 북마크 목록)에는 필요한 명령만 허용한다.",
+  "webviews": [
+    "popup"
+  ],
+  "permissions": [
+    "core:event:default",
+    "allow-popup-pick",
+    "allow-download-open",
+    "allow-download-show",
+    "allow-download-cancel",
+    "allow-popup-menu-pick"
+  ]
+}

@@ -1,0 +1,53 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "TBs Browser",
+  "version": "0.1.0",
+  "identifier": "com.tbsbrowser.app",
+  "build": {
+    "frontendDist": "../dist",
+    "beforeBuildCommand": "npm run build:ui"
+  },
+  "app": {
+    "withGlobalTauri": false,
+    "windows": [],
+    "security": {
+      "csp": "default-src 'self'; connect-src ipc: http://ipc.localhost; img-src 'self' data:; style-src 'self' 'unsafe-inline'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": [
+      "nsis"
+    ],
+    "createUpdaterArtifacts": true,
+    "icon": [
+      "icons/icon.ico"
+    ],
+    "publisher": "tbvwv123",
+    "shortDescription": "TB's Browser",
+    "windows": {
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper",
+        "silent": true
+      },
+      "nsis": {
+        "installMode": "currentUser",
+        "languages": [
+          "Korean"
+        ],
+        "installerIcon": "icons/icon.ico"
+      }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDU3MDQ2MjA4MkNFMDYyNUEKUldSYVl1QXNDR0lFVnl1WUNQM0l3VXlLeVl1SXNZc3pzTlFwbm9vM2hGVDNlNlpjYW51ZTd5THYK",
+      "endpoints": [
+        "https://github.com/tbvwv123/TBs-Browser/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
+  }
+}

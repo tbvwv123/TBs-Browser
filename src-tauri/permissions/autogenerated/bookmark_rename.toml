@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-bookmark-rename"
+description = "Enables the bookmark_rename command without any pre-configured scope."
+commands.allow = ["bookmark_rename"]
+
+[[permission]]
+identifier = "deny-bookmark-rename"
+description = "Denies the bookmark_rename command without any pre-configured scope."
+commands.deny = ["bookmark_rename"]

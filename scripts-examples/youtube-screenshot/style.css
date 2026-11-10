@@ -1,0 +1,23 @@
+#tbs-yt-shot {
+  margin: 12px 0 0;
+}
+#tbs-yt-shot button {
+  height: 36px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 18px;
+  background: rgba(0, 0, 0, 0.05);
+  color: #0f0f0f;
+  font: 500 14px Roboto, Arial, sans-serif;
+  cursor: pointer;
+}
+#tbs-yt-shot button:hover {
+  background: rgba(0, 0, 0, 0.1);
+}
+html[dark] #tbs-yt-shot button {
+  background: rgba(255, 255, 255, 0.1);
+  color: #f1f1f1;
+}
+html[dark] #tbs-yt-shot button:hover {
+  background: rgba(255, 255, 255, 0.2);
+}

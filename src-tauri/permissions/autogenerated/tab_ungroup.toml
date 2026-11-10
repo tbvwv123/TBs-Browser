@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-tab-ungroup"
+description = "Enables the tab_ungroup command without any pre-configured scope."
+commands.allow = ["tab_ungroup"]
+
+[[permission]]
+identifier = "deny-tab-ungroup"
+description = "Denies the tab_ungroup command without any pre-configured scope."
+commands.deny = ["tab_ungroup"]

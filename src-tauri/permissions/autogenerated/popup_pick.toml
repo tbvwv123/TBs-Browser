@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-popup-pick"
+description = "Enables the popup_pick command without any pre-configured scope."
+commands.allow = ["popup_pick"]
+
+[[permission]]
+identifier = "deny-popup-pick"
+description = "Denies the popup_pick command without any pre-configured scope."
+commands.deny = ["popup_pick"]

@@ -1,0 +1,3 @@
+# 이 저장소의 Rust 빌드는 MSVC 툴체인으로 한다 (기본 툴체인이 GNU인 PC에서도)
+[toolchain]
+channel = "stable-x86_64-pc-windows-msvc"

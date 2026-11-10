@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-s0-ping"
+description = "Enables the s0_ping command without any pre-configured scope."
+commands.allow = ["s0_ping"]
+
+[[permission]]
+identifier = "deny-s0-ping"
+description = "Denies the s0_ping command without any pre-configured scope."
+commands.deny = ["s0_ping"]

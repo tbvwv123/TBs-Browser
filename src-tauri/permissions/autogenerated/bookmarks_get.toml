@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-bookmarks-get"
+description = "Enables the bookmarks_get command without any pre-configured scope."
+commands.allow = ["bookmarks_get"]
+
+[[permission]]
+identifier = "deny-bookmarks-get"
+description = "Denies the bookmarks_get command without any pre-configured scope."
+commands.deny = ["bookmarks_get"]
