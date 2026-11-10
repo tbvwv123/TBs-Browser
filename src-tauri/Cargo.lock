@@ -3763,7 +3763,7 @@ dependencies = [
 
 [[package]]
 name = "tbs-browser"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "adblock",
  "rusqlite",
