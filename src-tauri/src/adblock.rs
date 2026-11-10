@@ -80,8 +80,11 @@ const COSMETIC_JS: &str = r#"(() => {
   const post = (m) => chrome.webview.postMessage(JSON.stringify({ __tbs_adblock: m }));
   let style = null, generic = true;
   const seenC = new Set(), seenI = new Set();
-  const add = (sels) => {
-    if (!sels || !sels.length) return;
+  // 브라우저가 못 읽는 선택자(uBO의 :has-text 같은 것)가 하나라도 끼면 같은 규칙 전체가 버려지므로 하나씩 걸러 낸다
+  const ok = (s) => { try { return CSS.supports("selector(" + s + ")"); } catch (e) { return false; } };
+  const add = (all) => {
+    const sels = (all || []).filter(ok);
+    if (!sels.length) return;
     if (!style) { style = document.createElement("style"); (document.head || document.documentElement).appendChild(style); }
     for (let i = 0; i < sels.length; i += 500) style.appendChild(document.createTextNode(sels.slice(i, i + 500).join(",") + "{display:none!important}"));
   };
