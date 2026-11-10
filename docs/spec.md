@@ -359,7 +359,7 @@ K와 M은 다크 시안이 없다. 기존 토큰만 쓰므로 G의 색을 그대
 | `enabled`, `pinned` | 켜짐 여부, 사이드바 맨 아래 줄에 아이콘을 고정할지 |
 | `icon` | 아이콘 파일(폴더 안의 PNG나 SVG). 없으면 이름 첫 글자로 그린다 (6.4) |
 | `version`, `description`, `author` | 스크립트 저장소(6.8)와 관리 화면에 보이는 정보 |
-| `settings` | 설정 칸 목록. 관리 화면이 설정 화면(`tbs://scripts/<id>`, 시안 N)을 그린다. 칸마다 `key`, `type`(`toggle` 켜기, `number` 숫자, `text` 글자, `list` 글자 목록, `select` 고르기), `label`, `default`, 그리고 해당하면 `options`(`value`·`label`), `section`(묶는 작은 제목), `unit`, `min`·`max`, `icon`(줄 앞의 한 색 아이콘 파일), `placeholder`, `description` |
+| `settings` | 설정 칸 목록. 관리 화면이 설정 화면(`tbs://scripts/<id>`, 시안 N)을 그린다. 칸마다 `key`, `type`(`toggle` 켜기, `number` 숫자, `text` 글자, `list` 글자 목록, `select` 고르기, `image` 그림), `label`, `default`, 그리고 해당하면 `options`(`value`·`label`), `section`(묶는 작은 제목), `unit`, `min`·`max`, `icon`(줄 앞의 한 색 아이콘 파일), `placeholder`, `description` |
 | `shortcuts` | 단축키 목록. 칸마다 `id`, `name`, `keys`("Alt+P", "Ctrl+Shift+Y", "F9"). 글자·숫자 키에는 Ctrl이나 Alt가 있어야 하고, 브라우저 단축키(5.6)와 겹치면 읽지 않는다. 페이지에 포커스가 있을 때, 그 스크립트가 지금 페이지에 맞으면 페이지로 넘기지 않고 스크립트에 전달한다 |
 | `actions` | 확장 패널에 보일 "이 탭에서 실행" 버튼. 칸마다 `id`, `name` |
 
@@ -447,7 +447,7 @@ K와 M은 다크 시안이 없다. 기존 토큰만 쓰므로 G의 색을 그대
 
 이 두 개가 동작하면 기능이 완성된 것으로 본다.
 
-1. **체스닷컴 기물 이미지 바꾸기**: 기물 이미지가 폴더에 넣은 이미지로 보인다. 스타일 덮어쓰기와 리소스 바꿔치기 중 되는 방법을 쓴다.
+1. **체스닷컴 기물 이미지 바꾸기**: 백·흑의 킹·퀸·룩·비숍·나이트·폰마다 설정 화면에서 그림을 고른다. 고르지 않은 기물은 원래 그림이다. 스타일 덮어쓰기를 쓴다.
 2. **유튜브 스크린샷 버튼**: 플레이어 아래에 버튼이 생기고, 누르면 현재 영상 화면이 PNG로 저장된다. 다른 영상으로 넘어가도 버튼이 유지된다.
 
 ### 6.6 크롬 확장

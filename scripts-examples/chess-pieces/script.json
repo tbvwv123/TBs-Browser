@@ -1,19 +1,107 @@
 {
   "id": "chess-pieces",
   "name": "체스닷컴 기물 바꾸기",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "체스닷컴 기물 그림 바꾸기",
   "author": "TB's Browser",
   "matches": [
     "https://www.chess.com/*"
   ],
   "run_at": "document_start",
-  "js": [],
-  "css": [
-    "style.css"
+  "js": [
+    "main.js"
   ],
+  "css": [],
   "resource_overrides": [],
   "permissions": [],
+  "settings": [
+    {
+      "key": "wk",
+      "type": "image",
+      "label": "킹",
+      "section": "백",
+      "default": ""
+    },
+    {
+      "key": "wq",
+      "type": "image",
+      "label": "퀸",
+      "section": "백",
+      "default": ""
+    },
+    {
+      "key": "wr",
+      "type": "image",
+      "label": "룩",
+      "section": "백",
+      "default": ""
+    },
+    {
+      "key": "wb",
+      "type": "image",
+      "label": "비숍",
+      "section": "백",
+      "default": ""
+    },
+    {
+      "key": "wn",
+      "type": "image",
+      "label": "나이트",
+      "section": "백",
+      "default": ""
+    },
+    {
+      "key": "wp",
+      "type": "image",
+      "label": "폰",
+      "section": "백",
+      "default": ""
+    },
+    {
+      "key": "bk",
+      "type": "image",
+      "label": "킹",
+      "section": "흑",
+      "default": ""
+    },
+    {
+      "key": "bq",
+      "type": "image",
+      "label": "퀸",
+      "section": "흑",
+      "default": ""
+    },
+    {
+      "key": "br",
+      "type": "image",
+      "label": "룩",
+      "section": "흑",
+      "default": ""
+    },
+    {
+      "key": "bb",
+      "type": "image",
+      "label": "비숍",
+      "section": "흑",
+      "default": ""
+    },
+    {
+      "key": "bn",
+      "type": "image",
+      "label": "나이트",
+      "section": "흑",
+      "default": ""
+    },
+    {
+      "key": "bp",
+      "type": "image",
+      "label": "폰",
+      "section": "흑",
+      "default": ""
+    }
+  ],
+  "shortcuts": [],
+  "actions": [],
   "enabled": true,
   "pinned": false
 }

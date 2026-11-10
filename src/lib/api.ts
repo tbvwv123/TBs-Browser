@@ -334,7 +334,7 @@ export interface ScriptInfo {
 /** 스크립트의 설정 칸 (spec 6.1 settings, 시안 N) */
 export interface SettingField {
   key: string;
-  type: "toggle" | "number" | "text" | "list" | "select";
+  type: "toggle" | "number" | "text" | "list" | "select" | "image";
   label: string;
   description: string;
   default: unknown;

@@ -56,7 +56,7 @@ scripts\<id>\
 | 항목 | 값 |
 | --- | --- |
 | `key` | 이름 (겹치면 오류) |
-| `type` | `toggle`, `number`, `text`, `list`, `select` |
+| `type` | `toggle`, `number`, `text`, `list`, `select`, `image` |
 | `label` | 화면에 보일 이름 |
 | `default` | 기본값 |
 | `options` | `select`: `[{ "value", "label" }]` |
@@ -65,7 +65,7 @@ scripts\<id>\
 | `icon` | 줄 앞 한 색 아이콘 (글자색으로 칠한다) |
 | `placeholder`, `description` | 칸 안 글자, 이름 아래 작은 글자 |
 
-`list`는 구역 하나를 따로 차지한다.
+`list`는 구역 하나를 따로 차지한다. `image`의 값은 그림의 데이터 URL(500KB까지)이고, 고르지 않으면 빈 글자다.
 
 ## tbs
 

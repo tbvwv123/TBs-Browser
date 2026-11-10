@@ -81,7 +81,12 @@ pub enum FieldKind {
     List,
     /// 고르기
     Select,
+    /// 그림 (PNG·JPEG·GIF·WebP·SVG). 값은 데이터 URL, 비우면 고르지 않은 것
+    Image,
 }
+
+/// 그림 칸 하나의 한도 (데이터 URL 길이)
+const IMAGE_MAX: usize = 700 * 1024;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct SelectOption {
@@ -584,6 +589,7 @@ fn default_value(f: &SettingField) -> Value {
         FieldKind::Text => Value::String(String::new()),
         FieldKind::List => Value::Array(Vec::new()),
         FieldKind::Select => Value::String(f.options.first().map(|o| o.value.clone()).unwrap_or_default()),
+        FieldKind::Image => Value::String(String::new()),
     })
 }
 
@@ -627,6 +633,18 @@ pub fn coerce(f: &SettingField, v: &Value) -> Result<Value, String> {
             let t = v.as_str().ok_or_else(wrong)?;
             if !f.options.iter().any(|o| o.value == t) {
                 return Err(wrong());
+            }
+            Ok(Value::String(t.to_string()))
+        }
+        FieldKind::Image => {
+            let t = v.as_str().ok_or_else(wrong)?;
+            const KINDS: [&str; 5] = ["png", "jpeg", "gif", "webp", "svg+xml"];
+            let ok = t.is_empty() || KINDS.iter().any(|k| t.starts_with(&format!("data:image/{k};base64,")));
+            if !ok {
+                return Err(format!("\"{}\"에는 PNG, JPEG, GIF, WebP, SVG 그림만 넣을 수 있습니다.", f.label));
+            }
+            if t.len() > IMAGE_MAX {
+                return Err(format!("\"{}\"의 그림이 너무 큽니다. 500KB보다 작은 그림을 골라 주세요.", f.label));
             }
             Ok(Value::String(t.to_string()))
         }
@@ -832,6 +850,16 @@ mod tests {
         assert_eq!(storage_op(&dir, "get", None, None).unwrap(), json!({ "x": { "a": 1 } }));
         storage_op(&dir, "remove", Some("x"), None).unwrap();
         assert!(storage_op(&dir, "drop", Some("x"), None).is_err());
+    }
+
+    #[test]
+    fn image_values() {
+        let f: SettingField = serde_json::from_value(json!({ "key": "wp", "type": "image", "label": "폰" })).unwrap();
+        assert_eq!(coerce(&f, &json!("")).unwrap(), json!(""));
+        assert!(coerce(&f, &json!("data:image/png;base64,AAAA")).is_ok());
+        assert!(coerce(&f, &json!("data:text/html;base64,AAAA")).is_err());
+        assert!(coerce(&f, &json!("https://evil.example/a.png")).is_err());
+        assert!(coerce(&f, &json!(format!("data:image/png;base64,{}", "A".repeat(800 * 1024)))).is_err());
     }
 
     /// 함께 넣는 예시가 모두 오류 없이 읽힌다

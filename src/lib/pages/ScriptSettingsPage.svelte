@@ -65,6 +65,26 @@
     set(f.key, n);
   }
 
+  // 그림 칸: 파일을 골라 데이터 URL로 넣는다 (500KB까지)
+  function pickImage(f: SettingField) {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/png,image/jpeg,image/gif,image/webp,image/svg+xml";
+    input.onchange = () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      if (file.size > 500 * 1024) {
+        report(`${file.name}이(가) 500KB보다 큽니다. 더 작은 그림을 골라 주세요.`);
+        return;
+      }
+      const r = new FileReader();
+      r.onload = () => set(f.key, String(r.result));
+      r.onerror = () => report(`${file.name}을(를) 읽지 못했습니다.`);
+      r.readAsDataURL(file);
+    };
+    input.click();
+  }
+
   function toggleEnabled(s: ScriptInfo) {
     host5.scriptSetEnabled(s.id, !s.enabled).catch(report);
   }
@@ -94,6 +114,17 @@
     <span class="unit">{f.unit}</span>
   {:else if f.type === "text"}
     <input class="field text" aria-label={f.label} placeholder={f.placeholder} value={value<string>(f)} onchange={(e) => set(f.key, e.currentTarget.value)} />
+  {:else if f.type === "image"}
+    {@const img = value<string>(f)}
+    <span class="thumb" aria-hidden="true">
+      {#if img}<img src={img} alt="" />{/if}
+    </span>
+    <button class="small" onclick={() => pickImage(f)}>{img ? "바꾸기" : "고르기"}</button>
+    {#if img}
+      <button class="x" aria-label="{f.label} 그림 지우기" title="원래대로" onclick={() => set(f.key, "")}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>
+      </button>
+    {/if}
   {:else if f.type === "select"}
     <div class="select">
       <button class="field select-button" aria-haspopup="listbox" aria-expanded={openSelect === f.key} aria-label={f.label} onclick={() => (openSelect = openSelect === f.key ? null : f.key)}>
@@ -325,6 +356,23 @@
     justify-content: center;
     background: var(--field-bg);
     border-radius: var(--field-icon-radius);
+  }
+  /* 그림 칸의 미리보기 (시안 N의 줄 앞 아이콘 칸과 같은 모양, 조금 크게) */
+  .thumb {
+    flex: none;
+    width: var(--select-height);
+    height: var(--select-height);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--field-bg);
+    border-radius: var(--field-icon-radius);
+    overflow: hidden;
+  }
+  .thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
   }
   .mask {
     width: 16px;
