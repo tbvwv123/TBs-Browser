@@ -126,6 +126,8 @@ fn hook_loop(app: AppHandle, dir: std::path::PathBuf) {
                 });
                 rx.recv_timeout(Duration::from_secs(5)).unwrap_or_else(|_| "timeout".into())
             }
+            // 업데이트 시험: "update" → 확인해 둔 새 버전을 내려받아 서명을 검사한다 (설치하지 않는다)
+            ("update", _) => tauri::async_runtime::block_on(crate::updater::dev_download(&app)),
             // DevTools 명령을 그대로 보낸다: "cdp <label> <method> <json>"
             ("cdp", Some(wv)) => {
                 let (method, params) = rest.split_once(' ').map(|(m, p)| (m.to_string(), p.to_string())).unwrap_or((rest.clone(), "{}".into()));

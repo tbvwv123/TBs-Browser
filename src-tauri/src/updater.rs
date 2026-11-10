@@ -29,7 +29,11 @@ pub fn start(app: &AppHandle) {
 
 /// 새 버전을 확인한다. 인터넷이 없거나 서버가 응답하지 않으면 로그만 남기고 조용히 넘어간다.
 async fn check(app: &AppHandle) {
-    let result = match app.updater() {
+    let builder = app.updater_builder();
+    // 개발용: 올라간 버전이 지금 버전과 같아도 새 버전으로 본다 (업데이트 확인·내려받기 시험)
+    #[cfg(debug_assertions)]
+    let builder = if std::env::var_os("TBS_DEV_FORCE_UPDATE").is_some() { builder.version_comparator(|_, _| true) } else { builder };
+    let result = match builder.build() {
         Ok(u) => u.check().await,
         Err(e) => Err(e),
     };
@@ -42,6 +46,17 @@ async fn check(app: &AppHandle) {
         }
         Ok(None) => log::info("업데이트 확인: 최신 버전"),
         Err(e) => log::warn(format!("업데이트 확인 실패: {e}")),
+    }
+}
+
+/// 개발용: 확인해 둔 새 버전을 내려받아 서명만 검사한다. 설치하지 않는다.
+#[cfg(debug_assertions)]
+pub async fn dev_download(app: &AppHandle) -> String {
+    let update = app.state::<UpdateState>().available.lock().unwrap().clone();
+    let Some(update) = update else { return "no update".into() };
+    match update.download(|_, _| {}, || {}).await {
+        Ok(bytes) => format!("downloaded {} bytes, signature ok, version {}", bytes.len(), update.version),
+        Err(e) => format!("ERR {e}"),
     }
 }
 
