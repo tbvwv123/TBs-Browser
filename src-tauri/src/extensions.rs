@@ -33,7 +33,8 @@ pub struct Record {
     pub id: String,
     pub enabled: bool,
     pub pinned: bool,
-    /// 사용자가 마지막으로 둔 팝업 창 크기 (논리 px). 없으면 내용에 맞춘다
+    /// 지난 버전이 남긴 팝업 창 크기. 지금은 쓰지 않는다 (팝업은 내용 크기로 연다). 파일을 그대로 읽기 위해 둔다
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub popup_size: Option<[f64; 2]>,
 }
 
@@ -630,18 +631,6 @@ fn install_into(app: &AppHandle, root: &Path, info: &Info, existing: Option<Stri
     save(app)?;
     log::info(format!("확장 설치: {} {}", info.name, info.version));
     Ok(())
-}
-
-pub fn popup_size(app: &AppHandle, id: &str) -> Option<(f64, f64)> {
-    app.state::<ExtStore>().records.lock().unwrap().iter().find(|r| r.id == id).and_then(|r| r.popup_size).map(|[w, h]| (w, h))
-}
-
-/// 팝업 창을 닫을 때의 크기를 기억한다 (다음에 그 크기로 연다)
-pub fn remember_popup_size(app: &AppHandle, id: &str, (w, h): (f64, f64)) {
-    if let Some(r) = app.state::<ExtStore>().records.lock().unwrap().iter_mut().find(|r| r.id == id) {
-        r.popup_size = Some([w.round(), h.round()]);
-    }
-    let _ = save(app);
 }
 
 pub fn is_enabled(app: &AppHandle, id: &str) -> bool {

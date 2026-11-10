@@ -130,18 +130,19 @@ pub fn refresh_downloads(app: &AppHandle) {
 
 /// 확장마다 창 하나 ("extpopup-<확장 ID>")
 pub const EXT_LABEL_PREFIX: &str = "extpopup-";
-/// 크기를 기억해 두지 않았을 때의 처음 크기. 불러온 뒤 내용 크기에 맞춘다 (작게 시작해야 내용이 자기 폭을 드러낸다)
-const EXT_START: (f64, f64) = (240.0, 160.0);
-const EXT_MIN: (f64, f64) = (160.0, 80.0);
+/// 처음 크기. 불러온 뒤 내용 크기(확장 개발자가 정한 크기)에 맞춘다. 작게 시작해야 내용이 자기 폭을 드러낸다
+const EXT_START: (f64, f64) = (160.0, 60.0);
+/// 크롬의 확장 팝업 최대 크기
+const EXT_MAX: (f64, f64) = (800.0, 600.0);
 
 fn ext_label(id: &str) -> String {
     format!("{EXT_LABEL_PREFIX}{id}")
 }
 
 /// 확장 팝업 페이지를 창으로 띄운다. 아래 끝이 `bottom`(메인 창 안쪽 좌표)에 오게 위로 펼친다.
-/// 제목 표시줄이 있어 옮기고 크기를 바꿀 수 있고, 닫을 때까지 떠 있다. 닫을 때의 크기를 확장마다 기억한다.
-/// 키보드 입력을 받는 보통 창이고, 앱 명령 권한은 없다 (capabilities에 없음).
-pub fn show_extension(app: &AppHandle, id: &str, name: &str, url: tauri::Url, x: f64, bottom: f64, saved: Option<(f64, f64)>) -> Result<(), String> {
+/// 크기는 크롬처럼 팝업 내용이 정한 크기(최대 800×600)이고 사용자가 바꾸지 않는다. 제목 표시줄로 옮길 수는 있다.
+/// 탭을 바꾸면 닫는다 (팝업은 연 탭 기준으로 그려진다). 키보드 입력을 받는 보통 창이고, 앱 명령 권한은 없다.
+pub fn show_extension(app: &AppHandle, id: &str, name: &str, url: tauri::Url, x: f64, bottom: f64) -> Result<(), String> {
     hide(app);
     let label = ext_label(id);
     // 이미 떠 있으면 앞으로 가져온다
@@ -155,16 +156,15 @@ pub fn show_extension(app: &AppHandle, id: &str, name: &str, url: tauri::Url, x:
     let scale = main.scale_factor().unwrap_or(1.0);
     let origin = main.inner_position().map_err(|e| e.to_string())?.to_logical::<f64>(scale);
     let anchor = (origin.x + x, origin.y + bottom);
-    let size = saved.unwrap_or(EXT_START);
+    let size = EXT_START;
     let app2 = app.clone();
     let label2 = label.clone();
-    let fit = saved.is_none();
     let w = WebviewWindowBuilder::new(app, &label, WebviewUrl::External(url))
         .title(name)
         .data_directory(paths::webview_dir())
         .browser_extensions_enabled(true)
         .decorations(true)
-        .resizable(true)
+        .resizable(false)
         .minimizable(false)
         .maximizable(false)
         .skip_taskbar(true)
@@ -172,10 +172,9 @@ pub fn show_extension(app: &AppHandle, id: &str, name: &str, url: tauri::Url, x:
         .focused(!crate::dev::quiet())
         .owner_raw(main.hwnd().map_err(|e| e.to_string())?)
         .inner_size(size.0, size.1)
-        .min_inner_size(EXT_MIN.0, EXT_MIN.1)
         .position(anchor.0, (anchor.1 - size.1).max(origin.y + 8.0))
         .on_page_load(move |_, payload| {
-            if fit && matches!(payload.event(), tauri::webview::PageLoadEvent::Finished) {
+            if matches!(payload.event(), tauri::webview::PageLoadEvent::Finished) {
                 // 팝업 내용은 불러온 뒤에도 그려지는 데 시간이 걸린다. 세 번 재서 커지기만 한다
                 for delay in [0u64, 400, 1200] {
                     let (a, l) = (app2.clone(), label2.clone());
@@ -227,17 +226,6 @@ pub fn show_extension(app: &AppHandle, id: &str, name: &str, url: tauri::Url, x:
             }
         }
     });
-    // 닫을 때의 크기를 기억한다
-    let (app3, id3, w3) = (app.clone(), id.to_string(), w.clone());
-    w.on_window_event(move |e| {
-        if let tauri::WindowEvent::CloseRequested { .. } = e {
-            let scale = w3.scale_factor().unwrap_or(1.0);
-            if let Ok(s) = w3.inner_size() {
-                let s = s.to_logical::<f64>(scale);
-                crate::extensions::remember_popup_size(&app3, &id3, (s.width, s.height));
-            }
-        }
-    });
     Ok(())
 }
 
@@ -269,9 +257,9 @@ fn grow_extension(app: &AppHandle, label: &str, anchor: (f64, f64), cw: f64, ch:
     let (Ok(inner), Ok(outer)) = (w.inner_size(), w.outer_size()) else { return };
     let (inner, outer) = (inner.to_logical::<f64>(scale), outer.to_logical::<f64>(scale));
     let main_h = main.inner_size().map(|s| s.to_logical::<f64>(scale).height).unwrap_or(800.0);
-    // 스크롤 막대가 생기지 않게 조금 여유를 둔다. 메인 창보다 크게는 하지 않는다
-    let want_w = (cw + 2.0).clamp(inner.width, 900.0);
-    let want_h = (ch + 2.0).clamp(inner.height, (main_h - 40.0).max(inner.height));
+    // 스크롤 막대가 생기지 않게 조금 여유를 둔다. 크롬의 최대 크기와 메인 창보다 크게는 하지 않는다
+    let want_w = (cw + 2.0).clamp(inner.width, EXT_MAX.0.max(inner.width));
+    let want_h = (ch + 2.0).clamp(inner.height, EXT_MAX.1.min(main_h - 40.0).max(inner.height));
     if want_w <= inner.width + 0.5 && want_h <= inner.height + 0.5 {
         return;
     }
@@ -288,8 +276,7 @@ pub fn close_extension_of(app: &AppHandle, id: &str) {
     }
 }
 
-/// 떠 있는 확장 팝업을 모두 닫는다
-#[allow(dead_code)]
+/// 떠 있는 확장 팝업을 모두 닫는다 (탭을 바꿀 때)
 pub fn close_extension(app: &AppHandle) {
     for (label, w) in app.webview_windows() {
         if label.starts_with(EXT_LABEL_PREFIX) {

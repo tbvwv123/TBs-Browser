@@ -551,6 +551,8 @@ fn layout(app: &AppHandle) {
     };
     let prev = std::mem::replace(&mut *browser(app).last_active.lock().unwrap(), active);
     if prev != active {
+        // 확장 팝업은 연 탭 기준으로 그려지므로 탭을 바꾸면 닫는다
+        later(app, crate::popup::close_extension);
         // 전체 화면이던 영상 탭에서 떠나면 그 전체 화면을 끈다
         let page = *browser(app).page_fullscreen.lock().unwrap();
         if let Some(t) = page.filter(|t| Some(*t) != active) {

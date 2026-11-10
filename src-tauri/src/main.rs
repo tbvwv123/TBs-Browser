@@ -447,8 +447,7 @@ async fn ext_open_popup(app: AppHandle, id: String, x: f64, bottom: f64) -> Resu
     let page = extensions::page_of(&app, &id, false)?;
     let url = extensions::page_url(&id, &page)?;
     let name = extensions::list(&app).into_iter().find(|i| i.id == id).map(|i| i.name).unwrap_or_default();
-    let saved = extensions::popup_size(&app, &id);
-    on_main(&app, move |a| popup::show_extension(a, &id, &name, url, x, bottom, saved))?
+    on_main(&app, move |a| popup::show_extension(a, &id, &name, url, x, bottom))?
 }
 
 /// 확장의 설정 페이지를 새 탭으로 연다
