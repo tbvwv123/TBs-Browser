@@ -102,8 +102,9 @@ fn save(app: &AppHandle) -> Result<(), String> {
 /// 확장 목록이 바뀌었다: UI에 알리고, 오른쪽 클릭 메뉴 브리지를 맞춘다
 fn emit(app: &AppHandle) {
     crate::browser::later(app, crate::ext_compat::sync_bridges);
-    crate::browser::emit_ui(app, "extensions_changed", list(app));
-    crate::popup::emit(app, "extensions_changed", list(app));
+    let l = list(app);
+    crate::browser::emit_ui(app, "extensions_changed", l.clone());
+    crate::popup::emit(app, "extensions_changed", l);
 }
 
 // ───────────── 매니페스트 읽기 ─────────────

@@ -429,6 +429,10 @@ pub fn close(app: &AppHandle, id: TabId) {
     };
     drop_webview(app, id);
     browser(app).visits.lock().unwrap().remove(&id);
+    // 웹뷰를 닫아도 남겨 두는 것(홈 밑의 페이지 등)은 탭을 닫을 때 지운다
+    HOME.with(|h| h.borrow_mut().remove(&id));
+    HOME_AHEAD.with(|h| h.borrow_mut().remove(&id));
+    RELOADED.with(|r| r.borrow_mut().remove(&id));
     if empty {
         // 마지막 탭을 닫으면 새 탭 하나를 연다 (spec 5.1)
         new_tab(app, 0, true);
@@ -519,6 +523,21 @@ fn drop_webview(app: &AppHandle, id: TabId) {
     if let Some(wv) = webview(app, id) {
         let _ = wv.close();
     }
+}
+
+/// 탭마다 남겨 둔 것의 (이름, 탭 id). 개발용 `orphans` 확인에 쓴다 (메인 스레드에서만)
+#[cfg(debug_assertions)]
+pub fn tab_entries(app: &AppHandle) -> Vec<(&'static str, TabId)> {
+    let mut v: Vec<(&'static str, TabId)> = Vec::new();
+    WEBVIEWS.with(|m| v.extend(m.borrow().keys().map(|id| ("browser.WEBVIEWS", *id))));
+    HOME.with(|m| v.extend(m.borrow().keys().map(|id| ("browser.HOME", *id))));
+    HOME_AHEAD.with(|m| v.extend(m.borrow().iter().map(|id| ("browser.HOME_AHEAD", *id))));
+    RELOADED.with(|m| v.extend(m.borrow().keys().map(|id| ("browser.RELOADED", *id))));
+    let b = browser(app);
+    v.extend(b.visits.lock().unwrap().keys().map(|id| ("browser.visits", *id)));
+    v.extend(b.page_fullscreen.lock().unwrap().map(|id| ("browser.page_fullscreen", id)));
+    v.extend(b.last_active.lock().unwrap().map(|id| ("browser.last_active", id)));
+    v
 }
 
 /// 웹뷰가 있는 탭들 (메인 스레드에서만)

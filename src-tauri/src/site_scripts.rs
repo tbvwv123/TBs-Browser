@@ -208,7 +208,8 @@ pub fn apply(app: &AppHandle, id: TabId, core: &ICoreWebView2, then: Box<dyn FnO
     for code in codes {
         let left_cb = left.clone();
         let handler = AddScriptToExecuteOnDocumentCreatedCompletedHandler::create(Box::new(move |err, sid| {
-            if err.is_ok() {
+            // 그새 웹뷰를 닫았으면(forget) 남기지 않는다
+            if err.is_ok() && FILTERS.with(|f| f.borrow().contains_key(&id)) {
                 REGISTERED.with(|r| r.borrow_mut().entry(id).or_default().push(sid));
             }
             count_down(&left_cb);
@@ -247,6 +248,15 @@ fn unregister(id: TabId, core: &ICoreWebView2) {
 pub fn forget(id: TabId) {
     REGISTERED.with(|r| r.borrow_mut().remove(&id));
     FILTERS.with(|f| f.borrow_mut().remove(&id));
+}
+
+/// 탭마다 남겨 둔 것의 (이름, 탭 id). 개발용 `orphans` 확인에 쓴다
+#[cfg(debug_assertions)]
+pub fn tab_entries() -> Vec<(&'static str, TabId)> {
+    let mut v: Vec<(&'static str, TabId)> = Vec::new();
+    REGISTERED.with(|m| v.extend(m.borrow().keys().map(|id| ("site_scripts.REGISTERED", *id))));
+    FILTERS.with(|m| v.extend(m.borrow().keys().map(|id| ("site_scripts.FILTERS", *id))));
+    v
 }
 
 /// 탭 웹뷰에 바꿔치기 처리기를 건다. 어떤 파일로 바꿀지는 요청이 올 때 지금 목록에서 찾는다.

@@ -89,6 +89,22 @@ fn hook_loop(app: AppHandle, dir: std::path::PathBuf) {
                 });
                 rx.recv_timeout(Duration::from_secs(5)).unwrap_or_else(|_| "timeout".into())
             }
+            // 닫힌 탭의 것이 남은 탭별 상태: [{"map": 이름, "tab": id}]
+            ("orphans", _) => {
+                let a = app.clone();
+                let _ = app.run_on_main_thread(move || {
+                    let ids: Vec<_> = crate::browser::snapshot(&a).tabs.iter().map(|t| t.id).collect();
+                    let mut all = crate::browser::tab_entries(&a);
+                    all.extend(crate::adblock::tab_entries());
+                    all.extend(crate::memory::tab_entries());
+                    all.extend(crate::site_scripts::tab_entries());
+                    all.extend(crate::permissions::tab_entries());
+                    all.extend(crate::downloads::tab_entries());
+                    let v: Vec<_> = all.into_iter().filter(|(_, t)| !ids.contains(t)).map(|(m, t)| serde_json::json!({ "map": m, "tab": t })).collect();
+                    let _ = tx.send(serde_json::Value::Array(v).to_string());
+                });
+                rx.recv_timeout(Duration::from_secs(5)).unwrap_or_else(|_| "timeout".into())
+            }
             ("js", Some(wv)) => {
                 let _ = wv.with_webview(move |p| unsafe {
                     let Ok(core) = p.controller().CoreWebView2() else { return };

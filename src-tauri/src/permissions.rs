@@ -80,6 +80,12 @@ pub fn list() -> Vec<Request> {
     PENDING.with(|p| group(p.borrow().iter().map(|x| (x.tab, x.site.as_str(), x.kind))))
 }
 
+/// 탭마다 남겨 둔 것의 (이름, 탭 id). 개발용 `orphans` 확인에 쓴다
+#[cfg(debug_assertions)]
+pub fn tab_entries() -> Vec<(&'static str, TabId)> {
+    PENDING.with(|p| p.borrow().iter().map(|x| ("permissions.PENDING", x.tab)).collect())
+}
+
 fn take(pred: impl Fn(&Pending) -> bool) -> Vec<Pending> {
     PENDING.with(|p| {
         let mut all = p.borrow_mut();

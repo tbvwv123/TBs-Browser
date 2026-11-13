@@ -51,6 +51,12 @@ pub fn tab_busy(tab: TabId) -> bool {
     ACTIVE.with(|a| a.borrow().values().any(|(_, t)| *t == tab))
 }
 
+/// 받는 중인 다운로드를 연 탭의 (이름, 탭 id). 개발용 `orphans` 확인에 쓴다
+#[cfg(debug_assertions)]
+pub fn tab_entries() -> Vec<(&'static str, TabId)> {
+    ACTIVE.with(|a| a.borrow().values().map(|(_, t)| ("downloads.ACTIVE", *t)).collect())
+}
+
 pub fn attach(app: &AppHandle, core: &ICoreWebView2, tab: TabId) -> Option<i64> {
     let c4 = core.cast::<ICoreWebView2_4>().ok()?;
     let app = app.clone();

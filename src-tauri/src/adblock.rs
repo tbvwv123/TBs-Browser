@@ -619,7 +619,8 @@ pub fn navigating(app: &AppHandle, id: TabId, core: &ICoreWebView2, uri: &str) {
     );
     unsafe {
         let h = AddScriptToExecuteOnDocumentCreatedCompletedHandler::create(Box::new(move |err, sid| {
-            if err.is_ok() {
+            // 그새 웹뷰를 닫았으면(detach) 남기지 않는다
+            if err.is_ok() && MAIN_NAV.with(|m| m.borrow().contains_key(&id)) {
                 SCRIPTLETS.with(|s| s.borrow_mut().insert(id, sid));
             }
             Ok(())
@@ -641,6 +642,17 @@ pub fn detach(core: &ICoreWebView2, id: TabId, token: i64) {
 /// 새 페이지를 불러오기 시작했다: 막은 개수를 0부터 센다
 pub fn page_started(id: TabId) {
     COUNTS.with(|c| c.borrow_mut().insert(id, 0));
+}
+
+/// 탭마다 남겨 둔 것의 (이름, 탭 id). 개발용 `orphans` 확인에 쓴다
+#[cfg(debug_assertions)]
+pub fn tab_entries() -> Vec<(&'static str, TabId)> {
+    let mut v: Vec<(&'static str, TabId)> = Vec::new();
+    COUNTS.with(|m| v.extend(m.borrow().keys().map(|id| ("adblock.COUNTS", *id))));
+    FILTERED.with(|m| v.extend(m.borrow().keys().map(|id| ("adblock.FILTERED", *id))));
+    MAIN_NAV.with(|m| v.extend(m.borrow().keys().map(|id| ("adblock.MAIN_NAV", *id))));
+    SCRIPTLETS.with(|m| v.extend(m.borrow().keys().map(|id| ("adblock.SCRIPTLETS", *id))));
+    v
 }
 
 // ───────────── 화면 숨기기 ─────────────

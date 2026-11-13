@@ -566,6 +566,57 @@ def check_home(app: App):
     app.close(t)
 
 
+def check_closed_state(app: App):
+    app.ensure_scripts()
+    gone = []
+
+    def home(t: int):
+        expect(app.page_request(t, "smoke-fixture", "tabs", {"action": "home"})["ok"], "홈 부탁이 거절됐습니다")
+        wait_until(lambda: app.tab(t)["url"] == "", 5, "홈으로 덮기")
+
+    # 홈에서 닫기 (HOME)
+    t = app.open("a.html")
+    home(t)
+    app.close(t)
+    gone.append(t)
+    # 홈에서 페이지의 부탁으로 닫기
+    t = app.open("a.html")
+    home(t)
+    expect(app.page_request(t, "smoke-fixture", "tabs", {"action": "close"})["ok"], "닫기 부탁이 거절됐습니다")
+    wait_until(lambda: not app.tab(t), 5, "닫기 부탁으로 탭 닫기")
+    gone.append(t)
+    # 홈에서 뒤로 온 뒤 닫기 (HOME_AHEAD)
+    t = app.open("a.html")
+    home(t)
+    app.invoke("go_back", {"id": t})
+    wait_until(lambda: (x := app.tab(t))["url"] == app.url("a.html") and x["canGoForward"], 5, "뒤로: 밑의 페이지로")
+    app.close(t)
+    gone.append(t)
+    # window.open으로 연 탭과 연 탭
+    t = app.open("a.html")
+    app.eval(f"tab-{t}", "window.open('/b.html?orphan'); 1")
+    url = app.url("b.html?orphan")
+    p = wait_until(lambda: next((x["id"] for x in app.state()["tabs"] if x["url"] == url), None), 10, "새 창 탭 생기기")
+    app.loaded(p, url)
+    app.close(p, t)
+    gone += [p, t]
+    # 열자마자 닫기 (스크립트 등록이 끝나기 전)
+    js = (
+        f"window.__TAURI_INTERNALS__.invoke('tab_open_url', {{input: {json.dumps(app.url('a.html?quick'))}}})"
+        ".then(() => window.__TAURI_INTERNALS__.invoke('get_state'))"
+        ".then(s => window.__TAURI_INTERNALS__.invoke('tab_close', {id: s.active}).then(() => s.active))"
+    )
+    gone.append(app.ui(js))
+    wait_until(lambda: not any(app.has_webview(i) for i in gone), 5, "닫은 탭의 웹뷰 닫기")
+    time.sleep(0.5)
+    expect_no_orphans(app)
+
+
+def expect_no_orphans(app: App):
+    out = app.hook("orphans x")
+    expect(json.loads(out) == [], f"닫은 탭의 것이 남아 있습니다: {out}")
+
+
 def check_scripts(app: App):
     app.ensure_scripts()
     for sid in ("smoke-fixture", "smoke-noperm"):
@@ -697,6 +748,8 @@ def check_memory(app: App):
     finally:
         app.set_settings(memory={"maxAwakeTabs": 12})
         app.close(*tabs)
+    # 버린 채로 닫은 탭(tabs[1])
+    expect_no_orphans(app)
 
 
 def check_extension(app: App):
@@ -736,6 +789,7 @@ def check_final(app: App):
     expect(not app.alerts("popup"), f"팝업에 오류가 떠 있습니다: {app.alerts('popup')}")
     bad = [l.strip() for l in read_log(app).splitlines() if "[tbs ERROR]" in l or "panicked" in l or "[tbs WARN] UI:" in l]
     expect(not bad, "로그: " + " / ".join(bad[:5]))
+    expect_no_orphans(app)
     app.track()
 
 
@@ -748,6 +802,7 @@ CHECKS = [
     ("페이지 안 이동과 뒤로·앞으로", check_history_nav, False),
     ("window.open과 window.close", check_window_open, False),
     ("홈", check_home, False),
+    ("닫은 탭의 상태 지우기", check_closed_state, False),
     ("사이트 스크립트", check_scripts, False),
     ("페이지의 부탁", check_requests, False),
     ("다운로드", check_download, False),

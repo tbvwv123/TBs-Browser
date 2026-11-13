@@ -189,7 +189,14 @@ fn discard(app: &AppHandle, id: TabId) {
     browser::discard(app, id);
 }
 
-/// 지금 상태 (시험·기록용)
+/// 탭마다 남겨 둔 것의 (이름, 탭 id). 개발용 `orphans` 확인에 쓴다
+#[cfg(debug_assertions)]
+pub fn tab_entries() -> Vec<(&'static str, TabId)> {
+    MEM.with(|m| m.borrow().keys().map(|id| ("memory.MEM", *id)).collect())
+}
+
+/// 지금 상태 (개발용 `mem` 확인에 쓴다)
+#[cfg(debug_assertions)]
 pub fn phases() -> Vec<(TabId, Phase)> {
     MEM.with(|m| m.borrow().iter().map(|(id, x)| (*id, x.phase)).collect())
 }
