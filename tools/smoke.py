@@ -335,6 +335,12 @@ class App:
             if self.tab(i):
                 self.invoke("tab_close", {"id": i})
 
+    def page_post(self, tid: int, script: str, kind: str, data: dict):
+        """페이지에서 사이트 스크립트의 부탁을 보내기만 한다 (탭이 닫히는 부탁은 답이 닿기 전에 웹뷰가 없어질 수 있다)"""
+        self.rid += 1
+        msg = json.dumps({"__tbs_site_script": {"script": script, "rid": self.rid, "kind": kind, "data": data}})
+        self.eval(f"tab-{tid}", f"chrome.webview.postMessage({json.dumps(msg)}); 1")
+
     def page_request(self, tid: int, script: str, kind: str, data: dict) -> dict:
         """페이지에서 사이트 스크립트의 부탁을 보내고 답을 받는다"""
         self.rid += 1
@@ -582,7 +588,7 @@ def check_closed_state(app: App):
     # 홈에서 페이지의 부탁으로 닫기
     t = app.open("a.html")
     home(t)
-    expect(app.page_request(t, "smoke-fixture", "tabs", {"action": "close"})["ok"], "닫기 부탁이 거절됐습니다")
+    app.page_post(t, "smoke-fixture", "tabs", {"action": "close"})
     wait_until(lambda: not app.tab(t), 5, "닫기 부탁으로 탭 닫기")
     gone.append(t)
     # 홈에서 뒤로 온 뒤 닫기 (HOME_AHEAD)
