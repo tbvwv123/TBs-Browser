@@ -25,6 +25,7 @@ npm install
 npm run app          # UI를 만들고 개발용으로 실행
 npm run check        # UI 형식 검사
 npm run test:host    # 호스트(Rust) 시험
+npm run test:ui      # UI 규칙 시험
 python tools/smoke.py  # 빌드하고 데스크톱 2에서 스모크 시험 (--no-build, --keep, --only)
 ```
 

@@ -255,6 +255,9 @@ pub struct ScriptInfo {
     pub actions: Vec<ActionDef>,
     /// 저장소에 새 판이 있으면 그 판 (spec 6.8)
     pub update: Option<String>,
+    /// matches가 가리키는 사이트 이름 (site_names)
+    pub sites: Vec<String>,
+    pub all_sites: bool,
 }
 
 impl Script {
@@ -277,6 +280,8 @@ impl Script {
             shortcuts: m.shortcuts.clone(),
             actions: m.actions.clone(),
             update: None,
+            sites: site_names(&m.matches),
+            all_sites: all_sites(&m.matches),
         }
     }
 
@@ -300,9 +305,15 @@ impl Script {
     }
 }
 
-/// 모든 사이트를 뜻하는 matches인지
+/// 모든 사이트를 뜻하는 matches인지: `*`, `<all_urls>`, 또는 (`*://`·`http://`·`https://`를 뗀) 호스트 칸이 `*`
 pub fn all_sites(matches: &[String]) -> bool {
-    matches.iter().any(|m| m == "*" || m.starts_with("*://*") || m == "https://*" || m == "http://*" || m == "<all_urls>")
+    matches.iter().any(|m| {
+        if m == "*" || m == "<all_urls>" {
+            return true;
+        }
+        let rest = ["*://", "http://", "https://"].iter().find_map(|s| m.strip_prefix(s)).unwrap_or(m);
+        rest.split('/').next() == Some("*")
+    })
 }
 
 /// matches가 가리키는 사이트 이름들 ("https://*.youtube.com/*" → "youtube.com"). 확인 창(시안 M)에 보인다
@@ -318,7 +329,7 @@ pub fn site_names(matches: &[String]) -> Vec<String> {
     out
 }
 
-/// `*`는 아무 글자나 (spec 6.1). 나머지는 그대로 비교한다.
+/// `*`는 아무 글자나 (spec 6.1). 나머지는 그대로 비교한다. UI의 patternMatches와 함께 tests/rules-vectors.json(`patterns`)으로 시험한다
 pub fn pattern_matches(pattern: &str, text: &str) -> bool {
     let parts: Vec<&str> = pattern.split('*').collect();
     if parts.len() == 1 {
@@ -774,6 +785,28 @@ mod tests {
         assert!(pattern_matches("https://a/*/x/*", "https://a/1/x/2"));
         assert!(pattern_matches("exact", "exact"));
         assert!(!pattern_matches("exact", "exact2"));
+    }
+
+    #[test]
+    fn pattern_vectors() {
+        let v: Value = serde_json::from_str(include_str!("../../tests/rules-vectors.json")).unwrap();
+        for c in v["patterns"].as_array().unwrap() {
+            let (p, t, want) = (c["pattern"].as_str().unwrap(), c["text"].as_str().unwrap(), c["match"].as_bool().unwrap());
+            assert_eq!(pattern_matches(p, t), want, "{c}");
+        }
+    }
+
+    #[test]
+    fn all_sites_rule() {
+        let all = |p: &str| all_sites(&[p.to_string()]);
+        for p in ["*", "<all_urls>", "https://*", "http://*", "https://*/*", "*://*/*", "*://*"] {
+            assert!(all(p), "{p}");
+        }
+        for p in ["*://*.youtube.com/*", "https://*.example.com/*", "https://www.youtube.com/*"] {
+            assert!(!all(p), "{p}");
+        }
+        assert!(all_sites(&["https://www.youtube.com/*".into(), "http://*".into()]));
+        assert!(!all_sites(&[]));
     }
 
     #[test]

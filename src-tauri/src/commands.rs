@@ -616,8 +616,8 @@ pub async fn script_remove(app: AppHandle, id: String) -> Result<(), String> {
 
 /// 찾아보기 목록. `refresh`면 새로 받는다
 #[tauri::command]
-pub async fn store_list(refresh: bool) -> Result<Vec<serde_json::Value>, String> {
-    blocking(move || store::list_json(refresh)).await
+pub async fn store_list(app: AppHandle, refresh: bool) -> Result<Vec<serde_json::Value>, String> {
+    blocking(move || store::list_json(&app, refresh)).await
 }
 
 /// "설치"·"업데이트": 확인 창을 띄우거나(권한이 늘지 않은 업데이트는 바로) 설치한다

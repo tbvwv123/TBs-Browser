@@ -62,7 +62,7 @@ static INDEX: Mutex<Option<Vec<Entry>>> = Mutex::new(None);
 /// 확인을 기다리는 설치·업데이트 (스크립트 id)
 static PENDING: Mutex<Option<String>> = Mutex::new(None);
 
-/// "1.10.0" > "1.9.2". 숫자가 아닌 칸과 없는 칸은 0
+/// "1.10.0" > "1.9.2". 숫자가 아닌 칸과 없는 칸은 0. UI는 견주지 않고 ScriptInfo.update를 본다
 pub fn newer(a: &str, b: &str) -> bool {
     let parse = |s: &str| -> Vec<u64> { s.split('.').map(|p| p.trim().parse().unwrap_or(0)).collect() };
     let (x, y) = (parse(a), parse(b));
@@ -91,8 +91,8 @@ fn download(path: &str) -> Result<Vec<u8>, String> {
     bytes
 }
 
-/// 목록을 새로 받는다
-pub fn fetch() -> Result<Vec<Entry>, String> {
+/// 목록을 새로 받는다. 스크립트 목록의 update가 바뀌므로 UI와 팝업에 다시 보낸다
+pub fn fetch(app: &AppHandle) -> Result<Vec<Entry>, String> {
     let bytes = download("index.json")?;
     let index: Index = serde_json::from_slice(&bytes).map_err(|e| format!("저장소 목록을 읽지 못했습니다({e}). 잠시 뒤 다시 시도해 주세요."))?;
     let list: Vec<Entry> = index
@@ -101,17 +101,18 @@ pub fn fetch() -> Result<Vec<Entry>, String> {
         .filter(|e| safe_id(&e.id) && e.zip.starts_with("dist/") && !e.zip.contains("..") && e.zip.ends_with(".zip"))
         .collect();
     *INDEX.lock().unwrap() = Some(list.clone());
+    site_scripts::emit_list(app);
     Ok(list)
 }
 
 /// 받아 둔 목록 (없으면 받는다)
-pub fn entries(refresh: bool) -> Result<Vec<Entry>, String> {
+pub fn entries(app: &AppHandle, refresh: bool) -> Result<Vec<Entry>, String> {
     if !refresh {
         if let Some(l) = INDEX.lock().unwrap().clone() {
             return Ok(l);
         }
     }
-    fetch()
+    fetch(app)
 }
 
 /// 설치한 것보다 새 판이 저장소에 있으면 그 판
@@ -123,12 +124,8 @@ pub fn update_for(id: &str, installed: &str) -> Option<String> {
 pub fn start(app: &AppHandle) {
     let app = app.clone();
     std::thread::spawn(move || loop {
-        match fetch() {
-            Ok(_) => {
-                let a = app.clone();
-                let _ = app.run_on_main_thread(move || site_scripts::reload(&a));
-            }
-            Err(e) => log::warn(format!("스크립트 저장소 목록을 받지 못함: {e}")),
+        if let Err(e) = fetch(&app) {
+            log::warn(format!("스크립트 저장소 목록을 받지 못함: {e}"));
         }
         std::thread::sleep(DAY);
     });
@@ -136,7 +133,7 @@ pub fn start(app: &AppHandle) {
 
 /// "설치"나 "업데이트"를 눌렀다. 설치는 늘 묻고, 업데이트는 권한이 늘었을 때만 묻는다 (시안 M)
 pub fn begin(app: &AppHandle, id: &str) -> Result<(), String> {
-    let entry = entries(false)?.into_iter().find(|e| e.id == id).ok_or("저장소에 그 스크립트가 없습니다. 찾아보기를 새로 열어 주세요.")?;
+    let entry = entries(app, false)?.into_iter().find(|e| e.id == id).ok_or("저장소에 그 스크립트가 없습니다. 찾아보기를 새로 열어 주세요.")?;
     let installed = site_scripts::with_script(app, id, |s| (s.manifest.version.clone(), s.manifest.permissions.clone(), s.all_sites(), s.manifest.matches.clone()));
     let (mode, from, new_perms, sites_changed) = match &installed {
         None => ("install", None, Vec::new(), true),
@@ -251,9 +248,19 @@ fn install(entry: &Entry, old: Option<(PathBuf, bool, bool)>) -> Result<(), Stri
     std::fs::rename(&tmp, &target).map_err(|e| format!("스크립트 폴더를 옮기지 못했습니다({e})."))
 }
 
-/// 찾아보기 목록. 상태는 UI가 설치한 스크립트와 견줘 정한다
-pub fn list_json(refresh: bool) -> Result<Vec<Value>, String> {
-    Ok(entries(refresh)?.into_iter().map(|e| serde_json::to_value(e).unwrap_or(Value::Null)).collect())
+/// 찾아보기 목록. 사이트 이름(`sites`, `allSites`)을 붙인다. 설치 상태는 UI가 ScriptInfo.update로 정한다
+pub fn list_json(app: &AppHandle, refresh: bool) -> Result<Vec<Value>, String> {
+    Ok(entries(app, refresh)?
+        .into_iter()
+        .map(|e| {
+            let mut v = serde_json::to_value(&e).unwrap_or(Value::Null);
+            if let Value::Object(o) = &mut v {
+                o.insert("sites".into(), json!(scripts::site_names(&e.matches)));
+                o.insert("allSites".into(), json!(scripts::all_sites(&e.matches)));
+            }
+            v
+        })
+        .collect())
 }
 
 #[cfg(test)]

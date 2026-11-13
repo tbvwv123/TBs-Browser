@@ -2,7 +2,7 @@
   // 확장 패널 (spec 6.4·6.6, 시안 K): 사이트 스크립트와 크롬 확장을 한 목록에 보여준다.
   // 펼친 사이드바에서는 사이드바 안에, 접힌 사이드바에서는 페이지 위 팝업 창 안에 그린다.
   // 줄은 켜기·끄기만 늘 보이고, 누르면 펼쳐져 팝업 열기·설정·고정·지우기가 나온다.
-  import { host, scriptApplies, extApplies, matchSites, sitesLabel, type ScriptInfo, type ExtInfo } from "./api";
+  import { host, scriptApplies, extApplies, sitesLabel, type ScriptInfo, type ExtInfo } from "./api";
 
   let {
     scripts,
@@ -46,25 +46,22 @@
   const NO_SITES = "적용 사이트 없음";
 
   const items = $derived.by((): Item[] => [
-    ...scripts.map((s): Item => {
-      const { hosts, all } = matchSites(s.matches);
-      return {
-        key: "s:" + s.id,
-        kind: "script",
-        id: s.id,
-        name: s.name,
-        icon: s.icon,
-        sites: sitesLabel(hosts, all, NO_SITES),
-        enabled: s.enabled,
-        pinned: s.pinned,
-        error: s.error,
-        applies: s.enabled && scriptApplies(s, url),
-        popup: false,
-        options: s.settings.length > 0,
-        actions: s.actions,
-        update: s.update,
-      };
-    }),
+    ...scripts.map((s): Item => ({
+      key: "s:" + s.id,
+      kind: "script",
+      id: s.id,
+      name: s.name,
+      icon: s.icon,
+      sites: sitesLabel(s.sites, s.allSites, NO_SITES),
+      enabled: s.enabled,
+      pinned: s.pinned,
+      error: s.error,
+      applies: s.enabled && scriptApplies(s, url),
+      popup: false,
+      options: s.settings.length > 0,
+      actions: s.actions,
+      update: s.update,
+    })),
     ...extensions.map((e): Item => ({
       key: "e:" + e.id,
       kind: "ext",

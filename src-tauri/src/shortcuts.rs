@@ -12,6 +12,7 @@ const VK_F5: u32 = 0x74;
 const VK_F11: u32 = 0x7A;
 
 /// 키 조합의 이름. 호스트가 처리하지 않는 키(Ctrl+F, F12 등)는 None으로 페이지에 맡긴다.
+/// UI의 shortcutName과 함께 tests/rules-vectors.json(`shortcuts`)으로 시험한다
 pub fn name(vk: u32, ctrl: bool, shift: bool, alt: bool) -> Option<&'static str> {
     let key = char::from_u32(vk).filter(|c| c.is_ascii_uppercase());
     Some(match (ctrl, shift, alt, key, vk) {
@@ -104,5 +105,15 @@ mod tests {
         assert_eq!(name('F' as u32, true, false, false), None);
         assert_eq!(name(0x7B, false, false, false), None);
         assert_eq!(name('C' as u32, true, false, false), None);
+    }
+
+    #[test]
+    fn shortcut_vectors() {
+        let v: serde_json::Value = serde_json::from_str(include_str!("../../tests/rules-vectors.json")).unwrap();
+        for c in v["shortcuts"].as_array().unwrap() {
+            let b = |k: &str| c[k].as_bool().unwrap();
+            let got = name(c["vk"].as_u64().unwrap() as u32, b("ctrl"), b("shift"), b("alt"));
+            assert_eq!(got, c["host"].as_str(), "{c}");
+        }
     }
 }

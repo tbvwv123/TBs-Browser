@@ -135,7 +135,8 @@ fn ext_of(source: &str) -> Option<&str> {
     source.strip_prefix("chrome-extension://")?.split('/').next()
 }
 
-/// 크롬 주소 패턴이 주소에 맞는지 ("https://*.example.com/*", "<all_urls>")
+/// 크롬 주소 패턴이 주소에 맞는지 ("https://*.example.com/*", "<all_urls>").
+/// UI의 chromeMatches와 함께 tests/rules-vectors.json(`chromePatterns`)으로 시험한다
 pub fn chrome_matches(pattern: &str, url: &str) -> bool {
     let Ok(u) = Url::parse(url) else { return false };
     if u.scheme() != "http" && u.scheme() != "https" {
@@ -546,6 +547,15 @@ mod tests {
         assert!(chrome_matches("*://*/*", "http://a.b/c"));
         assert!(chrome_matches("<all_urls>", "https://x.y/"));
         assert!(!chrome_matches("<all_urls>", "chrome-extension://abc/popup.html"));
+    }
+
+    #[test]
+    fn chrome_pattern_vectors() {
+        let v: Value = serde_json::from_str(include_str!("../../tests/rules-vectors.json")).unwrap();
+        for c in v["chromePatterns"].as_array().unwrap() {
+            let (p, u, want) = (c["pattern"].as_str().unwrap(), c["url"].as_str().unwrap(), c["match"].as_bool().unwrap());
+            assert_eq!(chrome_matches(p, u), want, "{c}");
+        }
     }
 
     #[test]

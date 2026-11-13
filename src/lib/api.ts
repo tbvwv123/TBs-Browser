@@ -1,6 +1,8 @@
 // 호스트와 주고받는 명령과 이벤트. 상태의 원본은 호스트에 있고 UI는 받아서 그리기만 한다 (spec 3장).
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { patternMatches, chromeMatches } from "./rules";
+export { shortcutName, patternMatches, chromeMatches, adblockSite } from "./rules";
 
 export type TabId = number;
 export type GroupId = number;
@@ -298,29 +300,6 @@ export function formatBytes(n: number): string {
   return `${v < 10 ? v.toFixed(1) : Math.round(v)} ${units[i]}`;
 }
 
-/** 브라우저 단축키 이름 (spec 5.6). 호스트의 shortcuts::name과 같은 규칙 */
-export function shortcutName(e: KeyboardEvent): string | null {
-  const k = e.key.length === 1 ? e.key.toUpperCase() : e.key;
-  const c = e.ctrlKey, s = e.shiftKey, a = e.altKey;
-  if (c && !s && !a && k === "T") return "new_tab";
-  if (c && !s && !a && k === "W") return "close_tab";
-  if (c && s && !a && k === "T") return "reopen_tab";
-  if (c && !a && k === "Tab") return s ? "prev_tab" : "next_tab";
-  if (c && !s && !a && k === "L") return "focus_address";
-  if ((c && !s && !a && k === "R") || (!c && !s && !a && k === "F5")) return "reload";
-  if (!c && !s && a && k === "ArrowLeft") return "back";
-  if (!c && !s && a && k === "ArrowRight") return "forward";
-  if (c && !s && !a && k === "D") return "bookmark";
-  if (c && !s && !a && k === "H") return "history";
-  if (c && !s && !a && k === "J") return "downloads";
-  if (c && !s && !a && k === "B") return "toggle_sidebar";
-  if (c && s && !a && k === "A") return "focus_tab_search";
-  if (c && !s && !a && k === "F") return "find";
-  if (!c && !s && !a && k === "F11") return "fullscreen";
-  if (!c && !s && !a && k === "F12") return "devtools";
-  return null;
-}
-
 // ───── 5단계: 사이트 스크립트 (spec 6장) ─────
 
 export interface ScriptInfo {
@@ -342,6 +321,9 @@ export interface ScriptInfo {
   actions: { id: string; name: string }[];
   /** 저장소에 있는 새 판 (spec 6.8) */
   update: string | null;
+  /** matches가 가리키는 사이트 ("www."와 "*."를 뺀 호스트) */
+  sites: string[];
+  allSites: boolean;
 }
 
 /** 스크립트의 설정 칸 (spec 6.1 settings, 시안 N) */
@@ -358,19 +340,6 @@ export interface SettingField {
   max: number | null;
   icon: string | null;
   placeholder: string;
-}
-
-/** `*`는 아무 글자나 (spec 6.1). 호스트의 scripts::pattern_matches와 같은 규칙 */
-export function patternMatches(pattern: string, text: string): boolean {
-  const re = new RegExp("^" + pattern.split("*").map((x) => x.replace(/[.+?^${}()|[\]\\]/g, "\\$&")).join(".*") + "$");
-  return re.test(text);
-}
-
-/** 스크립트의 matches가 가리키는 사이트들 ("www."와 "*."를 뺀 호스트)과 모든 사이트인지 */
-export function matchSites(matches: string[]): { hosts: string[]; all: boolean } {
-  const all = matches.some((m) => m === "*" || /^(\*|https?):\/\/\*\/?\*?$/.test(m) || m === "<all_urls>");
-  const hosts = [...new Set(matches.map((m) => m.replace(/^\w+:\/\//, "").split("/")[0].replace(/^\*\./, "").replace(/^www\./, "")))].filter((h) => h && h !== "*");
-  return { hosts, all };
 }
 
 /** "모든 사이트", "youtube.com", "youtube.com 외 2곳". 없으면 `none` */
@@ -427,40 +396,8 @@ export interface StoreEntry {
   icon: string | null;
   zip: string;
   size: number;
-}
-
-/** "1.10.0" > "1.9.2" (호스트의 store::newer와 같다) */
-export function newerVersion(a: string, b: string): boolean {
-  const x = a.split(".").map((p) => parseInt(p, 10) || 0);
-  const y = b.split(".").map((p) => parseInt(p, 10) || 0);
-  for (let i = 0; i < Math.max(x.length, y.length); i++) {
-    const p = x[i] ?? 0, q = y[i] ?? 0;
-    if (p !== q) return p > q;
-  }
-  return false;
-}
-
-/** 크롬 확장의 주소 패턴 ("https://*.dcinside.com/*", "<all_urls>")이 주소에 맞는지 */
-export function chromeMatches(pattern: string, url: string): boolean {
-  if (!/^https?:/.test(url)) return false;
-  if (pattern === "<all_urls>") return true;
-  const m = /^(\*|https?):\/\/([^/]*)(\/.*)?$/.exec(pattern);
-  if (!m) return false;
-  let u: URL;
-  try {
-    u = new URL(url);
-  } catch {
-    return false;
-  }
-  const [, scheme, host, path = "/*"] = m;
-  if (scheme !== "*" && scheme + ":" !== u.protocol) return false;
-  if (host !== "*") {
-    if (host.startsWith("*.")) {
-      const base = host.slice(2);
-      if (u.hostname !== base && !u.hostname.endsWith("." + base)) return false;
-    } else if (u.hostname !== host) return false;
-  }
-  return patternMatches(path, u.pathname + u.search);
+  sites: string[];
+  allSites: boolean;
 }
 
 export function extApplies(e: ExtInfo, url: string): boolean {
@@ -486,16 +423,6 @@ export interface AdblockList {
   enabled: boolean;
   rules: number;
   updated: number;
-}
-
-/** 광고 차단에서 쓰는 사이트 이름 ("www."를 뺀 호스트). 웹 페이지가 아니면 null */
-export function adblockSite(url: string): string | null {
-  if (!/^https?:/.test(url)) return null;
-  try {
-    return new URL(url).hostname.replace(/^www\./, "");
-  } catch {
-    return null;
-  }
 }
 
 /** "오늘 오전 9:12", "어제", "11월 3일" */

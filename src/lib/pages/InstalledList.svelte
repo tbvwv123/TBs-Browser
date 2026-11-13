@@ -1,7 +1,7 @@
 <script lang="ts">
   // 확장 프로그램 관리의 "설치됨" 탭 (tbs://extensions). 사이트 스크립트와 크롬 확장을 한 목록에서
   // 켜고 끄고, 설정·업데이트·지우기를 한다. 줄 모양은 찾아보기(시안 O)를 따른다.
-  import { host, matchSites, sitesLabel } from "../api";
+  import { host, sitesLabel } from "../api";
   import { ui, report } from "../store.svelte";
 
   type Item = {
@@ -18,11 +18,6 @@
     settings: boolean;
   };
 
-  function scriptSites(matches: string[]): string {
-    const { hosts, all } = matchSites(matches);
-    return sitesLabel(hosts, all);
-  }
-
   const items = $derived.by((): Item[] =>
     [
       ...ui.scripts.map((s): Item => ({
@@ -32,7 +27,7 @@
         name: s.name,
         version: s.version,
         icon: s.icon,
-        sites: scriptSites(s.matches),
+        sites: sitesLabel(s.sites, s.allSites),
         enabled: s.enabled,
         error: s.error,
         update: s.update,

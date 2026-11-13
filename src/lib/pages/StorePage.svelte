@@ -1,11 +1,11 @@
 <script lang="ts">
   // 확장 프로그램 관리 (spec 6.4·6.8). 두 탭:
   // - 설치됨 (tbs://extensions): 사이트 스크립트와 크롬 확장 관리 (InstalledList)
-  // - 찾아보기 (tbs://scripts, 시안 O): 저장소 목록. 설치한 스크립트와 견줘 설치 / 설치됨 / 업데이트를 정한다.
+  // - 찾아보기 (tbs://scripts, 시안 O): 저장소 목록. 설치 / 설치됨 / 업데이트는 설치한 스크립트의 update로 정한다.
   import "./page.css";
   import { onMount } from "svelte";
   import InstalledList from "./InstalledList.svelte";
-  import { host, newerVersion, on, matchSites, sitesLabel, type StoreEntry } from "../api";
+  import { host, on, sitesLabel, type StoreEntry } from "../api";
   import { ui, report, activeTab } from "../store.svelte";
 
   let { tab }: { tab: "installed" | "store" } = $props();
@@ -44,12 +44,7 @@
   function status(e: StoreEntry): "install" | "installed" | "update" {
     const s = ui.scripts.find((x) => x.id === e.id);
     if (!s) return "install";
-    return newerVersion(e.version, s.version) ? "update" : "installed";
-  }
-
-  function sites(matches: string[]): string {
-    const { hosts, all } = matchSites(matches);
-    return sitesLabel(hosts, all);
+    return s.update ? "update" : "installed";
   }
 
   const shown = $derived.by(() => {
@@ -133,7 +128,7 @@
                 <span class="meta">버전 {e.version}</span>
               </div>
               {#if e.description}<span class="desc">{e.description}</span>{/if}
-              <span class="meta">{[e.author && `만든 사람 ${e.author}`, sites(e.matches)].filter(Boolean).join(" · ")}</span>
+              <span class="meta">{[e.author && `만든 사람 ${e.author}`, sitesLabel(e.sites, e.allSites)].filter(Boolean).join(" · ")}</span>
             </div>
             {#if busy === e.id}
               <span class="done">설치 중…</span>

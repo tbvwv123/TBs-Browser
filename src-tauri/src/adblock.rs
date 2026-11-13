@@ -206,6 +206,7 @@ fn meta_file() -> PathBuf {
     dir().join("meta.json")
 }
 
+/// 광고 차단의 사이트 이름 ("www."를 뺀 호스트). UI의 adblockSite와 함께 tests/rules-vectors.json(`adblockSites`)으로 시험한다
 fn host_of(url: &str) -> Option<String> {
     let u = Url::parse(url).ok()?;
     if u.scheme() != "http" && u.scheme() != "https" {
@@ -766,6 +767,14 @@ mod tests {
     fn site_names() {
         assert_eq!(host_of("https://www.youtube.com/watch?v=1").as_deref(), Some("youtube.com"));
         assert_eq!(host_of("tbs://settings"), None);
+    }
+
+    #[test]
+    fn site_name_vectors() {
+        let v: Value = serde_json::from_str(include_str!("../../tests/rules-vectors.json")).unwrap();
+        for c in v["adblockSites"].as_array().unwrap() {
+            assert_eq!(host_of(c["url"].as_str().unwrap()).as_deref(), c["site"].as_str(), "{c}");
+        }
     }
 
     /// uBlock Origin 꼴(함수) 스크립틀릿과 trusted 권한

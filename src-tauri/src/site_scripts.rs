@@ -90,8 +90,14 @@ pub fn reload(app: &AppHandle) {
         .flat_map(|s| s.keys.iter().map(|(k, id)| KeyEntry { keys: *k, script: s.manifest.id.clone(), shortcut: id.clone(), matches: s.manifest.matches.clone() }))
         .collect();
     *store(app).0.lock().unwrap() = loaded;
-    crate::browser::emit_ui(app, "scripts_changed", list(app));
-    crate::popup::emit(app, "scripts_changed", list(app));
+    emit_list(app);
+}
+
+/// 지금 목록을 UI와 팝업에 보낸다 (폴더는 다시 읽지 않는다). 스크립트 목록과 저장소 목록의 잠금을 쥔 채로 부르면 안 된다
+pub fn emit_list(app: &AppHandle) {
+    let l = list(app);
+    crate::browser::emit_ui(app, "scripts_changed", l.clone());
+    crate::popup::emit(app, "scripts_changed", l);
 }
 
 /// 스크립트 폴더의 모양: 폴더 이름과 script.json 수정 시각 (점으로 시작하는 임시 폴더는 뺀다)

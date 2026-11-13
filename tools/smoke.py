@@ -441,6 +441,8 @@ def check_commands(app: App):
     expect(not bad, "; ".join(bad))
     expect(app.invoke("take_notices") == [], "알림이 남아 있습니다")
     expect(app.invoke("script_get", {"id": "smoke-fixture"}), "script_get이 시험용 스크립트를 찾지 못했습니다")
+    s = app.script("smoke-fixture")
+    expect(s and s.get("sites") == ["127.0.0.1:*"] and s.get("allSites") is False, f"scripts_list의 sites·allSites: {s and (s.get('sites'), s.get('allSites'))}")
     for c, a in [("ext_list", None), ("scripts_list", None), ("adblock_status", {"tab": None})]:
         r = app.call(c, a, webview="popup")
         expect(r["ok"], f"팝업에서 {c}: {r.get('error')}")
