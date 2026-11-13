@@ -25,6 +25,7 @@ npm install
 npm run app          # UI를 만들고 개발용으로 실행
 npm run check        # UI 형식 검사
 npm run test:host    # 호스트(Rust) 시험
+python tools/smoke.py  # 빌드하고 데스크톱 2에서 스모크 시험 (--no-build, --keep, --only)
 ```
 
 새 버전 올리기: `.\tools\release.ps1 -Version 0.1.2 -Notes "바뀐 점"` (업데이트 서명 키가 `%USERPROFILE%\.tauri\tbs-browser.key`에 있어야 합니다).

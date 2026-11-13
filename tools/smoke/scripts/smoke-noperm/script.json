@@ -1,0 +1,15 @@
+{
+  "id": "smoke-noperm",
+  "name": "스모크 권한 없음",
+  "version": "1.0.0",
+  "description": "스모크 시험용",
+  "author": "TB's Browser",
+  "matches": ["http://127.0.0.1:*"],
+  "run_at": "document_end",
+  "js": ["main.js"],
+  "css": [],
+  "resource_overrides": [],
+  "permissions": [],
+  "enabled": true,
+  "pinned": false
+}

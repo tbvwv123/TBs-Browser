@@ -1,0 +1,16 @@
+{
+  "id": "smoke-fixture",
+  "name": "스모크 스크립트",
+  "version": "1.0.0",
+  "description": "스모크 시험용",
+  "author": "TB's Browser",
+  "matches": ["http://127.0.0.1:*"],
+  "run_at": "document_end",
+  "js": ["main.js"],
+  "css": [],
+  "resource_overrides": [],
+  "permissions": ["tabs", "storage", "saveFile", "screenshot"],
+  "settings": [{ "key": "count", "type": "number", "label": "횟수", "default": 1, "min": 0, "max": 100 }],
+  "enabled": true,
+  "pinned": false
+}
