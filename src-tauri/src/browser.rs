@@ -62,23 +62,30 @@ const NAV_BUTTONS_JS: &str = r#"(() => {
   }, true);
 })();"#;
 
+/// 탭의 콘텐츠 웹뷰에 걸어 둔 것들. 웹뷰를 닫을 때 한꺼번에 뗀다 (spec 7장).
+#[derive(Default)]
+struct Attached {
+    /// 네이티브 처리기. 걸지 못했으면 None이고, 그 탭은 웹뷰가 없는 것으로 다룬다
+    hooks: Option<native::Hooks>,
+    /// 웹뷰를 담은 자식 창(WRY_WEBVIEW). 둥근 모서리 영역을 여기에 건다.
+    container: Option<isize>,
+    /// 다운로드 처리기 토큰
+    download: Option<i64>,
+    /// 광고 차단 처리기 토큰 (spec 6.7)
+    adblock: Option<i64>,
+    /// 리소스 바꿔치기 처리기 토큰 (spec 6.2)
+    overrides: Option<i64>,
+}
+
 thread_local! {
     /// 모든 웹뷰가 같이 쓰는 WebView2 환경 (UI 웹뷰의 것). 메인 스레드에만 있다.
     static ENV: RefCell<Option<ICoreWebView2Environment>> = const { RefCell::new(None) };
-    /// 탭마다 건 네이티브 처리기.
-    static HOOKS: RefCell<HashMap<TabId, native::Hooks>> = RefCell::new(HashMap::new());
+    /// 탭마다 콘텐츠 웹뷰에 걸어 둔 것
+    static WEBVIEWS: RefCell<HashMap<TabId, Attached>> = RefCell::new(HashMap::new());
     /// "홈"으로 새 탭 화면을 덮은 탭: 그 밑의 페이지(웹뷰와 기록은 그대로 둔다). 뒤로 가면 되돌린다
     static HOME: RefCell<HashMap<TabId, Tab>> = RefCell::new(HashMap::new());
     /// 홈에서 뒤로 와서, 앞으로 가면 다시 홈이 되는 탭
     static HOME_AHEAD: RefCell<std::collections::HashSet<TabId>> = RefCell::new(std::collections::HashSet::new());
-    /// 탭 웹뷰를 담은 자식 창(WRY_WEBVIEW). 둥근 모서리 영역을 여기에 건다.
-    static CONTAINERS: RefCell<HashMap<TabId, isize>> = RefCell::new(HashMap::new());
-    /// 탭마다 건 다운로드 처리기 토큰
-    static DOWNLOAD_TOKENS: RefCell<HashMap<TabId, i64>> = RefCell::new(HashMap::new());
-    /// 탭마다 건 리소스 바꿔치기 처리기 토큰 (spec 6.2)
-    static OVERRIDE_TOKENS: RefCell<HashMap<TabId, i64>> = RefCell::new(HashMap::new());
-    /// 탭마다 건 광고 차단 처리기 토큰 (spec 6.7)
-    static ADBLOCK_TOKENS: RefCell<HashMap<TabId, i64>> = RefCell::new(HashMap::new());
     /// 확장 페이지를 다시 연 때 (같은 탭에서 되풀이하지 않게)
     static RELOADED: RefCell<HashMap<TabId, std::time::Instant>> = RefCell::new(HashMap::new());
 }
@@ -116,7 +123,12 @@ fn browser(app: &AppHandle) -> tauri::State<'_, Browser> {
 
 /// 탭의 WebView2 객체 (웹뷰가 없으면 None). 메인 스레드에서만.
 pub fn core_of(id: TabId) -> Option<ICoreWebView2> {
-    HOOKS.with(|h| h.borrow().get(&id).map(|h| h.core.clone()))
+    WEBVIEWS.with(|m| m.borrow().get(&id).and_then(|a| a.hooks.as_ref()).map(|h| h.core.clone()))
+}
+
+/// 탭 웹뷰에 걸어 둔 것을 적는다
+fn attached(id: TabId, f: impl FnOnce(&mut Attached)) {
+    WEBVIEWS.with(|m| f(m.borrow_mut().entry(id).or_default()));
 }
 
 /// 메인 창의 핸들 (파일·폴더 고르기 창의 주인)
@@ -136,7 +148,7 @@ fn with_tab<T>(app: &AppHandle, id: TabId, f: impl FnOnce(&mut Tab) -> T) -> Opt
 
 /// 웹뷰가 있는 탭들 (버린 탭과 아직 안 불러온 탭은 빠진다)
 pub fn loaded_tabs() -> Vec<TabId> {
-    HOOKS.with(|h| h.borrow().keys().copied().collect())
+    cores().into_iter().map(|(id, _)| id).collect()
 }
 
 /// 메모리 정책의 "버림": 웹뷰를 닫고 주소·제목·파비콘만 남긴다 (spec 7장)
@@ -387,8 +399,8 @@ pub fn apply_theme(app: &AppHandle, dark: bool, system: bool, background: (u8, u
             }
         });
     }
-    HOOKS.with(|h| {
-        for hk in h.borrow().values() {
+    WEBVIEWS.with(|m| {
+        for hk in m.borrow().values().filter_map(|a| a.hooks.as_ref()) {
             native::set_background(&hk.controller, background);
         }
     });
@@ -489,21 +501,21 @@ fn drop_webview(app: &AppHandle, id: TabId) {
     if was_full {
         later(app, apply_fullscreen);
     }
-    if let Some(h) = HOOKS.with(|h| h.borrow_mut().remove(&id)) {
-        if let Some(t) = DOWNLOAD_TOKENS.with(|d| d.borrow_mut().remove(&id)) {
+    let attached = WEBVIEWS.with(|m| m.borrow_mut().remove(&id)).unwrap_or_default();
+    if let Some(h) = attached.hooks {
+        if let Some(t) = attached.download {
             downloads::detach(&h.core, t);
         }
-        if let Some(t) = ADBLOCK_TOKENS.with(|d| d.borrow_mut().remove(&id)) {
+        if let Some(t) = attached.adblock {
             adblock::detach(&h.core, id, t);
         }
-        if let Some(t) = OVERRIDE_TOKENS.with(|d| d.borrow_mut().remove(&id)) {
+        if let Some(t) = attached.overrides {
             site_scripts::detach_overrides(&h.core, t);
         }
         native::unhook(&h);
     }
     site_scripts::forget(id);
     memory::forget(id);
-    CONTAINERS.with(|c| c.borrow_mut().remove(&id));
     if let Some(wv) = webview(app, id) {
         let _ = wv.close();
     }
@@ -511,7 +523,7 @@ fn drop_webview(app: &AppHandle, id: TabId) {
 
 /// 웹뷰가 있는 탭들 (메인 스레드에서만)
 pub fn cores() -> Vec<(TabId, ICoreWebView2)> {
-    HOOKS.with(|h| h.borrow().iter().map(|(id, h)| (*id, h.core.clone())).collect())
+    WEBVIEWS.with(|m| m.borrow().iter().filter_map(|(id, a)| Some((*id, a.hooks.as_ref()?.core.clone()))).collect())
 }
 
 /// 사이트 스크립트를 켜고 끄거나 다시 불러온 뒤, 열린 탭마다 등록을 새로 한다.
@@ -614,7 +626,7 @@ fn clip_corners(app: &AppHandle, id: TabId) {
         Graphics::Gdi::{CreateRoundRectRgn, SetWindowRgn},
         UI::HiDpi::GetDpiForWindow,
     };
-    let Some(hwnd) = CONTAINERS.with(|c| c.borrow().get(&id).copied()) else { return };
+    let Some(hwnd) = WEBVIEWS.with(|m| m.borrow().get(&id).and_then(|a| a.container)) else { return };
     let (_, _, w, h) = *browser(app).card.lock().unwrap();
     let r = *browser(app).radius.lock().unwrap();
     let dpi = unsafe { GetDpiForWindow(HWND(hwnd as _)) };
@@ -709,32 +721,27 @@ fn create_webview(app: &AppHandle, id: TabId, url: Option<Url>, focus: bool, aft
         native::set_background(&p.controller(), browser(&app2).background.lock().unwrap().unwrap_or((255, 255, 255)));
         let mut container = windows::Win32::Foundation::HWND::default();
         if unsafe { p.controller().ParentWindow(&mut container) }.is_ok() {
-            CONTAINERS.with(|c| c.borrow_mut().insert(id, container.0 as isize));
+            attached(id, |a| a.container = Some(container.0 as isize));
             // 여기서 layout()처럼 Tauri의 웹뷰 API를 부르면 멈춘다. Win32로만 자른다.
             clip_corners(&app2, id);
         }
         let app3 = app2.clone();
         let sink: Rc<dyn Fn(Event)> = Rc::new(move |ev| on_event(&app3, id, ev));
         match native::hook(&p.controller(), &core, sink) {
-            Ok(h) => HOOKS.with(|m| {
-                m.borrow_mut().insert(id, h);
-            }),
+            Ok(h) => attached(id, |a| a.hooks = Some(h)),
             Err(e) => log::error(format!("탭 {id}의 처리기를 걸지 못함: {e:?}")),
         }
-        if let Some(t) = downloads::attach(&app2, &core, id) {
-            DOWNLOAD_TOKENS.with(|d| d.borrow_mut().insert(id, t));
-        }
+        let token = downloads::attach(&app2, &core, id);
+        attached(id, |a| a.download = token);
         // 마우스 옆 버튼(뒤로·앞으로)
         unsafe {
             let _ = core.AddScriptToExecuteOnDocumentCreated(&windows::core::HSTRING::from(NAV_BUTTONS_JS), None);
         }
         // 광고 차단 (spec 6.7): 요청 처리기와 화면 숨기기 스크립트
-        if let Some(t) = adblock::attach(&app2, &core, p.environment(), id) {
-            ADBLOCK_TOKENS.with(|d| d.borrow_mut().insert(id, t));
-        }
-        if let Some(t) = site_scripts::attach_overrides(&app2, &core, p.environment()) {
-            OVERRIDE_TOKENS.with(|d| d.borrow_mut().insert(id, t));
-        }
+        let token = adblock::attach(&app2, &core, p.environment(), id);
+        attached(id, |a| a.adblock = token);
+        let token = site_scripts::attach_overrides(&app2, &core, p.environment());
+        attached(id, |a| a.overrides = token);
         if focus {
             let _ = unsafe { p.controller().MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC) };
         }
