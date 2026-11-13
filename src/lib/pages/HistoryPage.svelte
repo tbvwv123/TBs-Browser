@@ -2,7 +2,7 @@
   // 방문 기록 페이지 (spec 5.4): 검색, 개별 삭제, 전체 삭제
   import "./page.css";
   import { onMount } from "svelte";
-  import { host, host4, readableUrl, type Visit } from "../api";
+  import { host, readableUrl, type Visit } from "../api";
   import { ui, report } from "../store.svelte";
 
   let query = $state("");
@@ -13,7 +13,7 @@
 
   async function load(append = false) {
     const before = append && visits.length ? visits[visits.length - 1].time : null;
-    const page = await host4.historySearch(query.trim(), before).catch((e) => {
+    const page = await host.historySearch(query.trim(), before).catch((e) => {
       report(e);
       return [] as Visit[];
     });
@@ -27,13 +27,13 @@
   }
 
   async function remove(id: number) {
-    await host4.historyDelete(id).catch(report);
+    await host.historyDelete(id).catch(report);
     visits = visits.filter((v) => v.id !== id);
   }
 
   async function clearAll() {
     confirmClear = false;
-    await host4.historyClear().catch(report);
+    await host.historyClear().catch(report);
     visits = [];
     more = false;
   }

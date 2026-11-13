@@ -1,7 +1,7 @@
 <script lang="ts">
   // 권한 요청 (spec 5.5): 카메라, 마이크, 알림, 위치를 쓰려 하면 허용·차단을 묻는다. 고른 답은 사이트별로 기억한다.
   // 콘텐츠 웹뷰 위에 그릴 수 없어서 툴바와 페이지 카드 사이에 한 줄로 띄운다 (그동안 카드가 그만큼 줄어든다).
-  import { host7, siteName, PERMISSION_NAMES, type PermissionRequest } from "./api";
+  import { host, siteName, PERMISSION_NAMES, type PermissionRequest } from "./api";
   import { report } from "./store.svelte";
 
   let { request }: { request: PermissionRequest } = $props();
@@ -16,7 +16,7 @@
   );
 
   function answer(allow: boolean, remember: boolean) {
-    host7.permissionAnswer(request.tab, request.site, allow, remember).catch(report);
+    host.permissionAnswer(request.tab, request.site, allow, remember).catch(report);
   }
 </script>
 

@@ -1,7 +1,7 @@
 <script lang="ts">
   // 다운로드 페이지 (spec 5.4): 항목마다 파일 열기, 폴더 열기, 취소
   import "./page.css";
-  import { host4, fileName, formatBytes, readableUrl } from "../api";
+  import { host, fileName, formatBytes, readableUrl } from "../api";
   import { ui, report } from "../store.svelte";
 
   const STATE: Record<string, string> = { progress: "받는 중", done: "완료", cancelled: "취소됨", failed: "실패" };
@@ -34,11 +34,11 @@
             {/if}
           </div>
           {#if d.state === "done"}
-            <button class="page-button" onclick={() => host4.downloadOpen(d.id).catch(report)}>파일 열기</button>
+            <button class="page-button" onclick={() => host.downloadOpen(d.id).catch(report)}>파일 열기</button>
           {/if}
-          <button class="page-button" onclick={() => host4.downloadShow(d.id).catch(report)}>폴더 열기</button>
+          <button class="page-button" onclick={() => host.downloadShow(d.id).catch(report)}>폴더 열기</button>
           {#if d.state === "progress"}
-            <button class="page-button" onclick={() => host4.downloadCancel(d.id).catch(report)}>취소</button>
+            <button class="page-button" onclick={() => host.downloadCancel(d.id).catch(report)}>취소</button>
           {/if}
         </div>
       {/each}

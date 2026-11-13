@@ -1,7 +1,7 @@
 <script lang="ts">
   // 설정 페이지 (spec 5.4). 바꾸면 바로 저장한다.
   import "./page.css";
-  import { host4, host10, whenText, type AdblockList, siteName, PERMISSION_NAMES, type Settings, type Theme, type SearchEngine, type PermissionKind } from "../api";
+  import { host, whenText, type AdblockList, siteName, PERMISSION_NAMES, type Settings, type Theme, type SearchEngine, type PermissionKind } from "../api";
   import { ui, report } from "../store.svelte";
 
   const THEMES: [Theme, string][] = [
@@ -20,14 +20,14 @@
     if (!ui.settings) return;
     const next: Settings = JSON.parse(JSON.stringify(ui.settings));
     patch(next);
-    ui.settings = await host4.settingsSet(next).catch((e) => {
+    ui.settings = await host.settingsSet(next).catch((e) => {
       report(e);
       return ui.settings;
     });
   }
 
   async function pickFolder() {
-    const dir = await host4.pickDownloadDir().catch((e) => {
+    const dir = await host.pickDownloadDir().catch((e) => {
       report(e);
       return null;
     });
@@ -51,7 +51,7 @@
   // 광고 차단 (spec 6.7, 시안 L)
   let lists = $state<AdblockList[]>([]);
   let updating = $state(false);
-  const loadLists = () => host10.adblockLists().then((l) => (lists = l), report);
+  const loadLists = () => host.adblockLists().then((l) => (lists = l), report);
   // 처음 열 때와, 목록을 새로 받아 호스트가 settings_changed를 다시 보낼 때 읽는다
   $effect(() => {
     void ui.settings;
@@ -60,7 +60,7 @@
 
   async function updateNow() {
     updating = true;
-    await host10.adblockUpdateNow().catch(report);
+    await host.adblockUpdateNow().catch(report);
     setTimeout(() => (updating = false), 1500);
   }
 
@@ -192,8 +192,8 @@
         <h2 class="page-section-title">확장 프로그램</h2>
         <div class="row">
           <span class="page-ellipsis path">사이트 스크립트 {ui.scripts.length}개 · 크롬 확장 {ui.extensions.length}개</span>
-          <button class="page-button" onclick={() => host4.runShortcut("extensions").catch(report)}>관리</button>
-          <button class="page-button" onclick={() => host4.runShortcut("store").catch(report)}>찾아보기</button>
+          <button class="page-button" onclick={() => host.runShortcut("extensions").catch(report)}>관리</button>
+          <button class="page-button" onclick={() => host.runShortcut("store").catch(report)}>찾아보기</button>
         </div>
       </section>
     {/if}

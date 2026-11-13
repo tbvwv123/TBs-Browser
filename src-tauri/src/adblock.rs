@@ -453,10 +453,8 @@ pub fn apply_settings(app: &AppHandle) {
         before != s.enabled
     });
     let _ = changed_lists;
-    for id in crate::browser::loaded_tabs() {
-        if let Some(core) = crate::browser::core_of(id) {
-            set_filter(id, &core, s.enabled);
-        }
+    for (id, core) in browser::cores() {
+        set_filter(id, &core, s.enabled);
     }
 }
 
@@ -528,7 +526,7 @@ pub fn attach(app: &AppHandle, core: &ICoreWebView2, env: ICoreWebView2Environme
         args.ResourceContext(&mut ctx)?;
         let mut uri = PWSTR::null();
         args.Request()?.Uri(&mut uri)?;
-        let uri = native_take(uri);
+        let uri = take_pwstr(uri);
         // 맨 위 문서는 막지 않는다. 그 밖의 문서 요청은 틀(sub_frame)이다
         let mut kind = request_type(ctx);
         if ctx == COREWEBVIEW2_WEB_RESOURCE_CONTEXT_DOCUMENT {
@@ -578,7 +576,7 @@ pub fn attach(app: &AppHandle, core: &ICoreWebView2, env: ICoreWebView2Environme
                             if args.TryGetWebMessageAsString(&mut text).is_ok() {
                                 // 사이트별 끄기는 틀이 아니라 탭의 맨 위 페이지를 따른다
                                 let page = native::source(&top);
-                                if let Some(Some(reply)) = cosmetic_reply(&page, &native_take(src), &native_take(text)) {
+                                if let Some(Some(reply)) = cosmetic_reply(&page, &take_pwstr(src), &take_pwstr(text)) {
                                     let _ = f.PostWebMessageAsJson(&HSTRING::from(reply));
                                 }
                             }
@@ -642,14 +640,6 @@ pub fn detach(core: &ICoreWebView2, id: TabId, token: i64) {
 /// 새 페이지를 불러오기 시작했다: 막은 개수를 0부터 센다
 pub fn page_started(id: TabId) {
     COUNTS.with(|c| c.borrow_mut().insert(id, 0));
-}
-
-fn native_take(p: PWSTR) -> String {
-    let s = unsafe { p.to_string().unwrap_or_default() };
-    if !p.is_null() {
-        unsafe { windows::Win32::System::Com::CoTaskMemFree(Some(p.0 as _)) };
-    }
-    s
 }
 
 // ───────────── 화면 숨기기 ─────────────

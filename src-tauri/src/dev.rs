@@ -173,8 +173,7 @@ fn hook_loop(app: AppHandle, dir: std::path::PathBuf) {
             // 설치 시험: "ext_install x <zip 또는 폴더>" → 고르기 창 없이 고른 것처럼 하고 설치 확인을 띄운다
             ("ext_install", _) => match crate::extensions::prepare(&app, std::path::Path::new(&rest)) {
                 Ok(info) => {
-                    use tauri::Emitter;
-                    let _ = app.emit_to(tauri::EventTarget::webview(crate::browser::UI_WEBVIEW), "install_ready", &info);
+                    crate::browser::emit_ui(&app, "install_ready", &info);
                     format!("prepared {}", info.name)
                 }
                 Err(e) => format!("ERR {e}"),

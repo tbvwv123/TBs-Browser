@@ -11,7 +11,7 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use tauri::{AppHandle, Emitter, EventTarget, Manager};
+use tauri::{AppHandle, Manager};
 use webview2_com::{Microsoft::Web::WebView2::Win32::*, *};
 use windows::core::{Interface, HSTRING, PWSTR};
 // webview2_com의 Result와 겹치지 않게 표준 Result를 쓴다
@@ -102,8 +102,8 @@ fn save(app: &AppHandle) -> Result<(), String> {
 /// 확장 목록이 바뀌었다: UI에 알리고, 오른쪽 클릭 메뉴 브리지를 맞춘다
 fn emit(app: &AppHandle) {
     crate::browser::later(app, crate::ext_compat::sync_bridges);
-    let _ = app.emit_to(EventTarget::webview(UI_WEBVIEW), "extensions_changed", list(app));
-    let _ = app.emit_to(EventTarget::webview(crate::popup::LABEL), "extensions_changed", list(app));
+    crate::browser::emit_ui(app, "extensions_changed", list(app));
+    crate::popup::emit(app, "extensions_changed", list(app));
 }
 
 // ───────────── 매니페스트 읽기 ─────────────
@@ -322,11 +322,7 @@ fn profile_op<T: Send + 'static>(
 fn pwstr(f: impl FnOnce(&mut PWSTR) -> windows::core::Result<()>) -> String {
     let mut p = PWSTR::null();
     let _ = f(&mut p);
-    let s = unsafe { p.to_string().unwrap_or_default() };
-    if !p.is_null() {
-        unsafe { windows::Win32::System::Com::CoTaskMemFree(Some(p.0 as _)) };
-    }
-    s
+    take_pwstr(p)
 }
 
 /// 프로필에 확장 폴더를 등록한다. 돌려주는 값은 확장 ID

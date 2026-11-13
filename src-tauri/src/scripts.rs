@@ -282,7 +282,7 @@ impl Script {
 
     /// 모든 사이트에서 도는지 (켤 때 묻는다, spec 6.1)
     pub fn all_sites(&self) -> bool {
-        self.manifest.matches.iter().any(|m| m == "*" || m.starts_with("*://*") || m == "https://*" || m == "http://*" || m == "<all_urls>")
+        all_sites(&self.manifest.matches)
     }
 
     /// 켤 때 물어야 하는지: 모든 사이트이거나 새 권한(tabs, storage)이 있을 때 (spec 6.3)
@@ -298,6 +298,24 @@ impl Script {
     pub fn applies_to(&self, url: &str) -> bool {
         self.manifest.matches.iter().any(|p| pattern_matches(p, url))
     }
+}
+
+/// 모든 사이트를 뜻하는 matches인지
+pub fn all_sites(matches: &[String]) -> bool {
+    matches.iter().any(|m| m == "*" || m.starts_with("*://*") || m == "https://*" || m == "http://*" || m == "<all_urls>")
+}
+
+/// matches가 가리키는 사이트 이름들 ("https://*.youtube.com/*" → "youtube.com"). 확인 창(시안 M)에 보인다
+pub fn site_names(matches: &[String]) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for p in matches {
+        let h = p.split_once("://").map(|(_, r)| r).unwrap_or(p).split('/').next().unwrap_or("");
+        let h = h.trim_start_matches("*.").trim_start_matches("www.").to_string();
+        if !h.is_empty() && h != "*" && !out.contains(&h) {
+            out.push(h);
+        }
+    }
+    out
 }
 
 /// `*`는 아무 글자나 (spec 6.1). 나머지는 그대로 비교한다.

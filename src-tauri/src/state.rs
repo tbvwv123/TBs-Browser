@@ -27,6 +27,18 @@ pub struct Tab {
     pub keep_alive: bool,
 }
 
+impl Tab {
+    /// 페이지 정보를 지워 빈 탭(새 탭 화면)으로 만든다. 그룹과 "항상 유지"는 남는다.
+    pub fn clear_page(&mut self) {
+        self.url.clear();
+        self.title.clear();
+        self.favicon = None;
+        self.loading = false;
+        self.can_go_back = false;
+        self.can_go_forward = false;
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Group {

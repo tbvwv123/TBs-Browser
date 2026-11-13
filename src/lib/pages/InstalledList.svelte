@@ -1,7 +1,7 @@
 <script lang="ts">
   // 확장 프로그램 관리의 "설치됨" 탭 (tbs://extensions). 사이트 스크립트와 크롬 확장을 한 목록에서
   // 켜고 끄고, 설정·업데이트·지우기를 한다. 줄 모양은 찾아보기(시안 O)를 따른다.
-  import { host5, host9, host12 } from "../api";
+  import { host, matchSites, sitesLabel } from "../api";
   import { ui, report } from "../store.svelte";
 
   type Item = {
@@ -19,9 +19,8 @@
   };
 
   function scriptSites(matches: string[]): string {
-    if (matches.some((m) => m === "*" || /^(\*|https?):\/\/\*\/?\*?$/.test(m) || m === "<all_urls>")) return "모든 사이트";
-    const hosts = [...new Set(matches.map((m) => m.replace(/^\w+:\/\//, "").split("/")[0].replace(/^\*\./, "").replace(/^www\./, "")))].filter((h) => h && h !== "*");
-    return hosts.length > 1 ? `${hosts[0]} 외 ${hosts.length - 1}곳` : (hosts[0] ?? "");
+    const { hosts, all } = matchSites(matches);
+    return sitesLabel(hosts, all);
   }
 
   const items = $derived.by((): Item[] =>
@@ -46,7 +45,7 @@
         name: e.name,
         version: e.version,
         icon: e.icon,
-        sites: e.allSites ? "모든 사이트" : e.sites.length > 1 ? `${e.sites[0]} 외 ${e.sites.length - 1}곳` : (e.sites[0] ?? ""),
+        sites: sitesLabel(e.sites, e.allSites),
         enabled: e.enabled,
         error: e.error,
         update: null,
@@ -61,14 +60,14 @@
     p.catch(report);
   }
   function toggle(i: Item) {
-    act(i.kind === "script" ? host5.scriptSetEnabled(i.id, !i.enabled) : host9.extSetEnabled(i.id, !i.enabled));
+    act(i.kind === "script" ? host.scriptSetEnabled(i.id, !i.enabled) : host.extSetEnabled(i.id, !i.enabled));
   }
   function openSettings(i: Item) {
-    act(i.kind === "script" ? host5.scriptOpenSettings(i.id) : host9.extOpenOptions(i.id));
+    act(i.kind === "script" ? host.scriptOpenSettings(i.id) : host.extOpenOptions(i.id));
   }
   function remove(i: Item) {
     confirmRemove = null;
-    act(i.kind === "script" ? host5.scriptRemove(i.id) : host9.extRemove(i.id));
+    act(i.kind === "script" ? host.scriptRemove(i.id) : host.extRemove(i.id));
   }
 </script>
 
@@ -98,7 +97,7 @@
         <button class="btn" onclick={() => (confirmRemove = null)}>취소</button>
       {:else}
         {#if i.update}
-          <button class="btn" onclick={() => act(host12.storeInstall(i.id))}><span class="dot" aria-hidden="true"></span>업데이트</button>
+          <button class="btn" onclick={() => act(host.storeInstall(i.id))}><span class="dot" aria-hidden="true"></span>업데이트</button>
         {/if}
         {#if i.settings}
           <button class="icon-btn" aria-label="{i.name} 설정" title="설정" onclick={() => openSettings(i)}>

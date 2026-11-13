@@ -10,7 +10,7 @@ use std::sync::{
     OnceLock,
 };
 
-use tauri::{AppHandle, Emitter, EventTarget, Window};
+use tauri::{AppHandle, Window};
 use windows::{
     core::{w, PCWSTR},
     Win32::{
@@ -23,7 +23,6 @@ use windows::{
     },
 };
 
-use crate::browser::UI_WEBVIEW;
 
 static APP: OnceLock<AppHandle> = OnceLock::new();
 static OVERLAY: AtomicIsize = AtomicIsize::new(0);
@@ -84,7 +83,7 @@ pub fn place_max_button(window: &Window, x: f64, y: f64, w: f64, h: f64) {
 fn emit_hover(hover: bool) {
     if HOVER.swap(hover, Ordering::SeqCst) != hover {
         if let Some(app) = APP.get() {
-            let _ = app.emit_to(EventTarget::webview(UI_WEBVIEW), "max_button_hover", hover);
+            crate::browser::emit_ui(app, "max_button_hover", hover);
         }
     }
 }

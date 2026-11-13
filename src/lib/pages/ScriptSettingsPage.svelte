@@ -2,7 +2,7 @@
   // 사이트 스크립트 설정 화면 (spec 6.1 settings·6.4, 시안 N). 주소: tbs://scripts/<id>
   // script.json의 settings 칸을 그리고, 바꾸면 바로 저장한다. 열린 페이지에는 tbs.onSettingsChanged로 알린다.
   import "./page.css";
-  import { host5, type ScriptInfo, type SettingField } from "../api";
+  import { host, type ScriptInfo, type SettingField } from "../api";
   import { ui, report } from "../store.svelte";
 
   let { id }: { id: string } = $props();
@@ -36,7 +36,7 @@
 
   function set(key: string, value: unknown) {
     if (!script) return;
-    host5.scriptSetValue(script.id, key, value).catch(report);
+    host.scriptSetValue(script.id, key, value).catch(report);
   }
 
   function value<T>(f: SettingField): T {
@@ -86,12 +86,12 @@
   }
 
   function toggleEnabled(s: ScriptInfo) {
-    host5.scriptSetEnabled(s.id, !s.enabled).catch(report);
+    host.scriptSetEnabled(s.id, !s.enabled).catch(report);
   }
 
   async function remove(s: ScriptInfo) {
     confirmRemove = false;
-    await host5.scriptRemove(s.id).catch(report);
+    await host.scriptRemove(s.id).catch(report);
   }
 
   function optionLabel(f: SettingField): string {

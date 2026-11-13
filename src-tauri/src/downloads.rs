@@ -4,12 +4,11 @@
 
 use std::{cell::RefCell, collections::HashMap, path::PathBuf};
 
-use tauri::{AppHandle, Emitter, EventTarget, Manager};
+use tauri::{AppHandle, Manager};
 use webview2_com::{Microsoft::Web::WebView2::Win32::*, *};
 use windows::core::{Interface, HSTRING, PWSTR};
 
 use crate::{
-    browser::UI_WEBVIEW,
     state::TabId,
     history::{Download, History},
     settings,
@@ -27,7 +26,7 @@ pub fn list(app: &AppHandle) -> Vec<Download> {
 }
 
 fn emit_list(app: &AppHandle) {
-    let _ = app.emit_to(EventTarget::webview(UI_WEBVIEW), "downloads_changed", list(app));
+    crate::browser::emit_ui(app, "downloads_changed", list(app));
     crate::popup::refresh_downloads(app);
 }
 
@@ -153,7 +152,7 @@ fn progress(app: &AppHandle, id: i64, op: &ICoreWebView2DownloadOperation, state
     if state_changed || state != "progress" {
         emit_list(app);
     } else if let Some(d) = hist.download(id) {
-        let _ = app.emit_to(EventTarget::webview(UI_WEBVIEW), "download_progress", &d);
+        crate::browser::emit_ui(app, "download_progress", &d);
         crate::popup::refresh_downloads(app);
     }
 }

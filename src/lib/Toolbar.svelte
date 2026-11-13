@@ -2,7 +2,7 @@
   // 상단 툴바 (spec 4.4): 뒤로, 앞으로, 새로고침, 주소창, 다운로드 표시, 창 버튼. 빈 곳은 창을 끄는 영역이다.
   import { onMount, tick } from "svelte";
   import { getCurrentWindow } from "@tauri-apps/api/window";
-  import { host, host4, host10, on, displayUrl, readableUrl, isBookmarked, adblockSite, type Suggestion } from "./api";
+  import { host, on, displayUrl, readableUrl, isBookmarked, adblockSite, type Suggestion } from "./api";
   import { token } from "./store.svelte";
   import { ui, report, activeTab } from "./store.svelte";
 
@@ -35,14 +35,14 @@
 
   async function showAdblock() {
     if (!shieldButton) return;
-    const status = await host10.adblockStatus(ui.activeId).catch((e) => {
+    const status = await host.adblockStatus(ui.activeId).catch((e) => {
       report(e);
       return null;
     });
     if (!status) return;
     const bar = addressBox.getBoundingClientRect();
     const w = token("--adblock-popup-width");
-    host4.popupShow("adblock", { x: bar.right - 6 - w, y: bar.bottom + 6, w, h: 240 }, { status }).catch(report);
+    host.popupShow("adblock", { x: bar.right - 6 - w, y: bar.bottom + 6, w, h: 240 }, { status }).catch(report);
   }
 
   // 다운로드 진행 고리 (spec 4.4): 진행 중일 때만 보인다
@@ -109,12 +109,12 @@
     const r = boxRect();
     const h = 8 + suggestions.length * 34;
     suggestShown = true;
-    host4.popupShow("suggest", { ...r, h }, { items: suggestions, selected }).catch(report);
+    host.popupShow("suggest", { ...r, h }, { items: suggestions, selected }).catch(report);
   }
 
   function hideSuggestions() {
     clearTimeout(suggestTimer);
-    if (suggestShown) host4.popupHide().catch(report);
+    if (suggestShown) host.popupHide().catch(report);
     suggestShown = false;
     suggestions = [];
     selected = -1;
@@ -133,7 +133,7 @@
     const q = address.trim();
     if (!q) return hideSuggestions();
     suggestTimer = window.setTimeout(async () => {
-      const items = await host4.suggest(q).catch(() => []);
+      const items = await host.suggest(q).catch(() => []);
       if (address.trim() !== q || !addressFocused) return;
       suggestions = items;
       showSuggestions();
@@ -192,7 +192,7 @@
     const r = ringButton.getBoundingClientRect();
     const w = 320;
     const h = 8 + running.length * 62;
-    host4.popupShow("downloads", { x: Math.max(8, r.right - w), y: r.bottom + 4, w, h }, { items: running }).catch(report);
+    host.popupShow("downloads", { x: Math.max(8, r.right - w), y: r.bottom + 4, w, h }, { items: running }).catch(report);
   }
 </script>
 

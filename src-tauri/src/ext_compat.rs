@@ -218,7 +218,7 @@ pub fn listen(app: &AppHandle, core: &ICoreWebView2) {
                 let mut text = PWSTR::null();
                 args.Source(&mut src)?;
                 if args.TryGetWebMessageAsString(&mut text).is_ok() {
-                    let (src, text) = (take(src), take(text));
+                    let (src, text) = (take_pwstr(src), take_pwstr(text));
                     handle_message(&app, &wv, &src, &text);
                 }
                 Ok(())
@@ -226,14 +226,6 @@ pub fn listen(app: &AppHandle, core: &ICoreWebView2) {
             &mut token,
         );
     }
-}
-
-fn take(p: PWSTR) -> String {
-    let s = unsafe { p.to_string().unwrap_or_default() };
-    if !p.is_null() {
-        unsafe { windows::Win32::System::Com::CoTaskMemFree(Some(p.0 as _)) };
-    }
-    s
 }
 
 // ───────────── 브리지 (보이지 않는 확장 페이지) ─────────────
@@ -317,7 +309,7 @@ fn target(t: &ICoreWebView2ContextMenuTarget) -> Target {
         let s = |f: &dyn Fn(&mut PWSTR) -> windows::core::Result<()>| {
             let mut p = PWSTR::null();
             let _ = f(&mut p);
-            take(p)
+            take_pwstr(p)
         };
         let b = |f: &dyn Fn(&mut windows::core::BOOL) -> windows::core::Result<()>| {
             let mut v = windows::core::BOOL(0);

@@ -45,6 +45,7 @@ export interface Bookmarks {
 type Opt<T> = T | null;
 
 export const host = {
+  // 탭, 탭 그룹 (spec 5.1)
   getState: () => invoke<Snapshot>("get_state"),
   tabCreate: () => invoke<TabId>("tab_create"),
   tabClose: (id: TabId) => invoke<void>("tab_close", { id }),
@@ -57,7 +58,6 @@ export const host = {
   setContentBounds: (r: DOMRect, radius: number) =>
     invoke<void>("set_content_bounds", { x: r.left, y: r.top, w: r.width, h: r.height, radius }),
   setMaxButtonBounds: (r: DOMRect) => invoke<void>("set_max_button_bounds", { x: r.left, y: r.top, w: r.width, h: r.height }),
-
   tabOpenUrl: (input: string) => invoke<void>("tab_open_url", { input }),
   tabMove: (id: TabId, before: Opt<TabId>, group: Opt<GroupId>) => invoke<void>("tab_move", { id, before, group }),
   groupCreate: (tab: TabId, title: string) => invoke<GroupId | null>("group_create", { tab, title }),
@@ -67,6 +67,7 @@ export const host = {
   tabUngroup: (id: TabId) => invoke<void>("tab_ungroup", { id }),
   tabSetKeepAlive: (id: TabId, keep: boolean) => invoke<void>("tab_set_keep_alive", { id, keep }),
 
+  // 북마크 (spec 5.3)
   bookmarksGet: () => invoke<Bookmarks>("bookmarks_get"),
   takeNotices: () => invoke<string[]>("take_notices"),
   bookmarkAdd: (parent: Opt<string>, before: Opt<string>, title: string, url: string, icon: Opt<string>) =>
@@ -79,26 +80,82 @@ export const host = {
   bookmarkMove: (id: string, parent: Opt<string>, before: Opt<string>) => invoke<void>("bookmark_move", { id, parent, before }),
   bookmarkSetOpen: (id: string, open: boolean) => invoke<void>("bookmark_set_open", { id, open }),
   bookmarksSetCollapsed: (collapsed: boolean) => invoke<void>("bookmarks_set_collapsed", { collapsed }),
+
+  // 설정, 방문 기록, 다운로드, 단축키, 팝업 (spec 5.4)
+  settingsGet: () => invoke<Settings>("settings_get"),
+  settingsSet: (value: Settings) => invoke<Settings>("settings_set", { value }),
+  pickDownloadDir: () => invoke<string | null>("pick_download_dir"),
+  historySearch: (query: string, before: number | null) => invoke<Visit[]>("history_search", { query, before }),
+  historyDelete: (id: number) => invoke<void>("history_delete", { id }),
+  historyClear: () => invoke<void>("history_clear"),
+  suggest: (query: string) => invoke<Suggestion[]>("suggest", { query }),
+  downloadsGet: () => invoke<Download[]>("downloads_get"),
+  downloadOpen: (id: number) => invoke<void>("download_open", { id }),
+  downloadShow: (id: number) => invoke<void>("download_show", { id }),
+  downloadCancel: (id: number) => invoke<void>("download_cancel", { id }),
+  runShortcut: (name: string) => invoke<void>("run_shortcut", { name }),
+  popupShow: (kind: PopupKind, r: { x: number; y: number; w: number; h: number }, data: unknown) =>
+    invoke<void>("popup_show", { kind, ...r, data: { theme: document.documentElement.dataset.theme ?? "light", ...(data as object) } }),
+  popupHide: () => invoke<void>("popup_hide"),
+  popupPick: (url: string, newTab = false) => invoke<void>("popup_pick", { url, newTab }),
+  popupMenuPick: (index: number) => invoke<void>("popup_menu_pick", { index }),
+  fullscreenState: () => invoke<boolean>("fullscreen_state"),
+
+  // 접힌 사이드바, 새 탭 화면, 권한, 테마
+  sidebarGet: () => invoke<boolean>("sidebar_get"),
+  sidebarSetCollapsed: (collapsed: boolean) => invoke<void>("sidebar_set_collapsed", { collapsed }),
+  topSites: () => invoke<TopSite[]>("top_sites"),
+  permissionRequests: () => invoke<PermissionRequest[]>("permission_requests"),
+  permissionAnswer: (tab: TabId, site: string, allow: boolean, remember: boolean) =>
+    invoke<void>("permission_answer", { tab, site, allow, remember }),
+  applyTheme: (dark: boolean, system: boolean, background: [number, number, number]) =>
+    invoke<void>("apply_theme", { dark, system, background }),
+
+  // 업데이트, 오류 로그 (spec 5.7)
+  updateGet: () => invoke<string | null>("update_get"),
+  updateInstall: () => invoke<void>("update_install"),
+  logUi: (message: string) => invoke<void>("log_ui", { message }),
+
+  // 사이트 스크립트 (spec 6장)
+  scriptsList: () => invoke<ScriptInfo[]>("scripts_list"),
+  /** 모든 사이트이거나 새 권한이 있으면, confirmed 없이는 켜지 않고 켜기 확인 창을 띄운다 */
+  scriptSetEnabled: (id: string, enabled: boolean, confirmed = false) => invoke<void>("script_set_enabled", { id, enabled, confirmed }),
+  scriptGet: (id: string) => invoke<ScriptInfo | null>("script_get", { id }),
+  scriptSetValue: (id: string, key: string, value: unknown) => invoke<void>("script_set_value", { id, key, value }),
+  scriptOpenSettings: (id: string) => invoke<void>("script_open_settings", { id }),
+  scriptRunAction: (id: string, action: string) => invoke<void>("script_run_action", { id, action }),
+  scriptRemove: (id: string) => invoke<void>("script_remove", { id }),
+  scriptSetPinned: (id: string, pinned: boolean) => invoke<void>("script_set_pinned", { id, pinned }),
+  scriptsReload: () => invoke<ScriptInfo[]>("scripts_reload"),
+  scriptsOpenFolder: () => invoke<void>("scripts_open_folder"),
+
+  // 스크립트 저장소 (spec 6.8)
+  storeList: (refresh: boolean) => invoke<StoreEntry[]>("store_list", { refresh }),
+  storeInstall: (id: string) => invoke<void>("store_install", { id }),
+  storeConfirm: (id: string, accept: boolean) => invoke<void>("store_confirm", { id, accept }),
+
+  // 크롬 확장 (spec 6.6)
+  extList: () => invoke<ExtInfo[]>("ext_list"),
+  extInstallPick: (folder: boolean) => invoke<ExtInfo | null>("ext_install_pick", { folder }),
+  extInstallConfirm: (accept: boolean) => invoke<void>("ext_install_confirm", { accept }),
+  extSetEnabled: (id: string, enabled: boolean) => invoke<void>("ext_set_enabled", { id, enabled }),
+  extSetPinned: (id: string, pinned: boolean) => invoke<void>("ext_set_pinned", { id, pinned }),
+  extRemove: (id: string) => invoke<void>("ext_remove", { id }),
+  extOpenPopup: (id: string, x: number, bottom: number) => invoke<void>("ext_open_popup", { id, x, bottom }),
+  extOpenOptions: (id: string) => invoke<void>("ext_open_options", { id }),
+  popupFit: (h: number) => invoke<void>("popup_fit", { h }),
+
+  // 광고 차단 (spec 6.7)
+  adblockStatus: (tab: TabId | null) => invoke<AdblockStatus>("adblock_status", { tab }),
+  adblockSetSite: (site: string, enabled: boolean) => invoke<void>("adblock_set_site", { site, enabled }),
+  adblockLists: () => invoke<AdblockList[]>("adblock_lists"),
+  adblockUpdateNow: () => invoke<void>("adblock_update_now"),
+  adblockReload: () => invoke<void>("adblock_reload"),
 };
 
-export function onTabsChanged(f: (s: Snapshot) => void): Promise<UnlistenFn> {
-  return listen<Snapshot>("tabs_changed", (e) => f(e.payload));
-}
-
-export function onTabUpdated(f: (t: Tab) => void): Promise<UnlistenFn> {
-  return listen<Tab>("tab_updated", (e) => f(e.payload));
-}
-
-export function onBookmarksChanged(f: (b: Bookmarks) => void): Promise<UnlistenFn> {
-  return listen<Bookmarks>("bookmarks_changed", (e) => f(e.payload));
-}
-
-export function onMaxButtonHover(f: (hover: boolean) => void): Promise<UnlistenFn> {
-  return listen<boolean>("max_button_hover", (e) => f(e.payload));
-}
-
-export function onWindowMaximized(f: (maximized: boolean) => void): Promise<UnlistenFn> {
-  return listen<boolean>("window_maximized", (e) => f(e.payload));
+/** 호스트가 보내는 이벤트를 듣는다 */
+export function on<T>(event: string, f: (payload: T) => void): Promise<UnlistenFn> {
+  return listen<T>(event, (e) => f(e.payload));
 }
 
 /** 사람이 읽는 주소: %EC%84… 같은 인코딩을 한글로 풀어 보여준다. 풀 수 없으면 그대로 둔다. */
@@ -179,27 +236,6 @@ export interface Download {
   time: number;
 }
 
-export const host4 = {
-  settingsGet: () => invoke<Settings>("settings_get"),
-  settingsSet: (value: Settings) => invoke<Settings>("settings_set", { value }),
-  pickDownloadDir: () => invoke<string | null>("pick_download_dir"),
-  historySearch: (query: string, before: number | null) => invoke<Visit[]>("history_search", { query, before }),
-  historyDelete: (id: number) => invoke<void>("history_delete", { id }),
-  historyClear: () => invoke<void>("history_clear"),
-  suggest: (query: string) => invoke<Suggestion[]>("suggest", { query }),
-  downloadsGet: () => invoke<Download[]>("downloads_get"),
-  downloadOpen: (id: number) => invoke<void>("download_open", { id }),
-  downloadShow: (id: number) => invoke<void>("download_show", { id }),
-  downloadCancel: (id: number) => invoke<void>("download_cancel", { id }),
-  runShortcut: (name: string) => invoke<void>("run_shortcut", { name }),
-  popupShow: (kind: PopupKind, r: { x: number; y: number; w: number; h: number }, data: unknown) =>
-    invoke<void>("popup_show", { kind, ...r, data: { theme: document.documentElement.dataset.theme ?? "light", ...(data as object) } }),
-  popupHide: () => invoke<void>("popup_hide"),
-  popupPick: (url: string, newTab = false) => invoke<void>("popup_pick", { url, newTab }),
-  popupMenuPick: (index: number) => invoke<void>("popup_menu_pick", { index }),
-  fullscreenState: () => invoke<boolean>("fullscreen_state"),
-};
-
 export type PopupKind = "suggest" | "downloads" | "menu" | "bookmarks" | "extensions" | "install" | "adblock";
 
 // ───── 7단계: 접힌 사이드바, 새 탭 화면, 테마, 권한 ─────
@@ -226,47 +262,24 @@ export const PERMISSION_NAMES: Record<PermissionKind, string> = {
   geolocation: "위치",
 };
 
-export const host8 = {
-  updateGet: () => invoke<string | null>("update_get"),
-  updateInstall: () => invoke<void>("update_install"),
-  logUi: (message: string) => invoke<void>("log_ui", { message }),
-};
-
-export const host7 = {
-  sidebarGet: () => invoke<boolean>("sidebar_get"),
-  sidebarSetCollapsed: (collapsed: boolean) => invoke<void>("sidebar_set_collapsed", { collapsed }),
-  topSites: () => invoke<TopSite[]>("top_sites"),
-  permissionRequests: () => invoke<PermissionRequest[]>("permission_requests"),
-  permissionAnswer: (tab: TabId, site: string, allow: boolean, remember: boolean) =>
-    invoke<void>("permission_answer", { tab, site, allow, remember }),
-  applyTheme: (dark: boolean, system: boolean, background: [number, number, number]) =>
-    invoke<void>("apply_theme", { dark, system, background }),
-};
-
 /** "https://www.example.com" → "www.example.com" (사람에게 보여 줄 사이트 이름) */
 export function siteName(site: string): string {
   return site.replace(/^https?:\/\//, "");
 }
 
-export function on<T>(event: string, f: (payload: T) => void): Promise<UnlistenFn> {
-  return listen<T>(event, (e) => f(e.payload));
-}
-
 /** 내부 페이지의 이름 (탭 제목) */
 export function internalTitle(url: string): string | null {
-  switch (url) {
-    case "tbs://history":
-      return "방문 기록";
-    case "tbs://downloads":
-      return "다운로드";
-    case "tbs://settings":
-      return "설정";
-  }
-  if (url === "tbs://scripts") return "찾아보기";
-  if (url === "tbs://extensions") return "확장 프로그램";
   if (url.startsWith("tbs://scripts/")) return "스크립트 설정";
-  return null;
+  return INTERNAL_TITLES[url] ?? null;
 }
+
+const INTERNAL_TITLES: Record<string, string> = {
+  "tbs://history": "방문 기록",
+  "tbs://downloads": "다운로드",
+  "tbs://settings": "설정",
+  "tbs://scripts": "찾아보기",
+  "tbs://extensions": "확장 프로그램",
+};
 
 export function fileName(path: string): string {
   return path.split(/[\\/]/).pop() || path;
@@ -347,24 +360,24 @@ export interface SettingField {
   placeholder: string;
 }
 
-export const host5 = {
-  scriptsList: () => invoke<ScriptInfo[]>("scripts_list"),
-  /** 모든 사이트이거나 새 권한이 있으면, confirmed 없이는 켜지 않고 켜기 확인 창을 띄운다 */
-  scriptSetEnabled: (id: string, enabled: boolean, confirmed = false) => invoke<void>("script_set_enabled", { id, enabled, confirmed }),
-  scriptGet: (id: string) => invoke<ScriptInfo | null>("script_get", { id }),
-  scriptSetValue: (id: string, key: string, value: unknown) => invoke<void>("script_set_value", { id, key, value }),
-  scriptOpenSettings: (id: string) => invoke<void>("script_open_settings", { id }),
-  scriptRunAction: (id: string, action: string) => invoke<void>("script_run_action", { id, action }),
-  scriptRemove: (id: string) => invoke<void>("script_remove", { id }),
-  scriptSetPinned: (id: string, pinned: boolean) => invoke<void>("script_set_pinned", { id, pinned }),
-  scriptsReload: () => invoke<ScriptInfo[]>("scripts_reload"),
-  scriptsOpenFolder: () => invoke<void>("scripts_open_folder"),
-};
-
 /** `*`는 아무 글자나 (spec 6.1). 호스트의 scripts::pattern_matches와 같은 규칙 */
 export function patternMatches(pattern: string, text: string): boolean {
   const re = new RegExp("^" + pattern.split("*").map((x) => x.replace(/[.+?^${}()|[\]\\]/g, "\\$&")).join(".*") + "$");
   return re.test(text);
+}
+
+/** 스크립트의 matches가 가리키는 사이트들 ("www."와 "*."를 뺀 호스트)과 모든 사이트인지 */
+export function matchSites(matches: string[]): { hosts: string[]; all: boolean } {
+  const all = matches.some((m) => m === "*" || /^(\*|https?):\/\/\*\/?\*?$/.test(m) || m === "<all_urls>");
+  const hosts = [...new Set(matches.map((m) => m.replace(/^\w+:\/\//, "").split("/")[0].replace(/^\*\./, "").replace(/^www\./, "")))].filter((h) => h && h !== "*");
+  return { hosts, all };
+}
+
+/** "모든 사이트", "youtube.com", "youtube.com 외 2곳". 없으면 `none` */
+export function sitesLabel(hosts: string[], all: boolean, none = ""): string {
+  if (all) return "모든 사이트";
+  if (!hosts.length) return none;
+  return hosts.length === 1 ? hosts[0] : `${hosts[0]} 외 ${hosts.length - 1}곳`;
 }
 
 /** 이 주소에 적용되는 스크립트인지 */
@@ -416,12 +429,6 @@ export interface StoreEntry {
   size: number;
 }
 
-export const host12 = {
-  storeList: (refresh: boolean) => invoke<StoreEntry[]>("store_list", { refresh }),
-  storeInstall: (id: string) => invoke<void>("store_install", { id }),
-  storeConfirm: (id: string, accept: boolean) => invoke<void>("store_confirm", { id, accept }),
-};
-
 /** "1.10.0" > "1.9.2" (호스트의 store::newer와 같다) */
 export function newerVersion(a: string, b: string): boolean {
   const x = a.split(".").map((p) => parseInt(p, 10) || 0);
@@ -432,18 +439,6 @@ export function newerVersion(a: string, b: string): boolean {
   }
   return false;
 }
-
-export const host9 = {
-  extList: () => invoke<ExtInfo[]>("ext_list"),
-  extInstallPick: (folder: boolean) => invoke<ExtInfo | null>("ext_install_pick", { folder }),
-  extInstallConfirm: (accept: boolean) => invoke<void>("ext_install_confirm", { accept }),
-  extSetEnabled: (id: string, enabled: boolean) => invoke<void>("ext_set_enabled", { id, enabled }),
-  extSetPinned: (id: string, pinned: boolean) => invoke<void>("ext_set_pinned", { id, pinned }),
-  extRemove: (id: string) => invoke<void>("ext_remove", { id }),
-  extOpenPopup: (id: string, x: number, bottom: number) => invoke<void>("ext_open_popup", { id, x, bottom }),
-  extOpenOptions: (id: string) => invoke<void>("ext_open_options", { id }),
-  popupFit: (h: number) => invoke<void>("popup_fit", { h }),
-};
 
 /** 크롬 확장의 주소 패턴 ("https://*.dcinside.com/*", "<all_urls>")이 주소에 맞는지 */
 export function chromeMatches(pattern: string, url: string): boolean {
@@ -492,14 +487,6 @@ export interface AdblockList {
   rules: number;
   updated: number;
 }
-
-export const host10 = {
-  adblockStatus: (tab: TabId | null) => invoke<AdblockStatus>("adblock_status", { tab }),
-  adblockSetSite: (site: string, enabled: boolean) => invoke<void>("adblock_set_site", { site, enabled }),
-  adblockLists: () => invoke<AdblockList[]>("adblock_lists"),
-  adblockUpdateNow: () => invoke<void>("adblock_update_now"),
-  adblockReload: () => invoke<void>("adblock_reload"),
-};
 
 /** 광고 차단에서 쓰는 사이트 이름 ("www."를 뺀 호스트). 웹 페이지가 아니면 null */
 export function adblockSite(url: string): string | null {

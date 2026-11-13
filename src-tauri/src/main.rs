@@ -30,7 +30,7 @@ mod store;
 mod updater;
 
 use tauri::{
-    webview::WebviewBuilder, window::WindowBuilder, AppHandle, Emitter, EventTarget, LogicalPosition, LogicalSize, Manager, WebviewUrl,
+    webview::WebviewBuilder, window::WindowBuilder, AppHandle, LogicalPosition, LogicalSize, Manager, WebviewUrl,
 };
 
 use browser::{Browser, MAIN_WINDOW, UI_WEBVIEW};
@@ -312,10 +312,7 @@ async fn adblock_reload(app: AppHandle) -> Result<(), String> {
 #[tauri::command]
 async fn pick_download_dir(app: AppHandle) -> Result<Option<String>, String> {
     let start = settings::get(&app).download_dir();
-    on_main(&app, move |a| {
-        let owner = a.get_window(MAIN_WINDOW).and_then(|w| w.hwnd().ok()).map(|h| h.0 as isize);
-        settings::pick_folder(owner, &start)
-    })
+    on_main(&app, move |a| settings::pick_folder(browser::main_hwnd(a), &start))
 }
 
 #[tauri::command]
@@ -411,7 +408,7 @@ async fn popup_hide(app: AppHandle) -> Result<(), String> {
 #[tauri::command]
 async fn popup_pick(app: AppHandle, url: String, new_tab: Option<bool>) -> Result<(), String> {
     let target = input::resolve(&url, settings::get(&app).search_engine).ok_or("고른 주소가 비어 있습니다.")?;
-    let _ = app.emit_to(EventTarget::webview(UI_WEBVIEW), "popup_picked", &url);
+    browser::emit_ui(&app, "popup_picked", &url);
     on_main(&app, move |a| {
         popup::hide(a);
         if new_tab.unwrap_or(false) {
@@ -433,13 +430,13 @@ async fn popup_fit(app: AppHandle, h: f64) -> Result<(), String> {
 /// 팝업으로 띄운 메뉴에서 항목을 골랐다 (접힌 사이드바). 무엇을 할지는 UI가 안다.
 #[tauri::command]
 async fn popup_menu_pick(app: AppHandle, index: usize) -> Result<(), String> {
-    let _ = app.emit_to(EventTarget::webview(UI_WEBVIEW), "popup_menu_picked", index);
+    browser::emit_ui(&app, "popup_menu_picked", index);
     on_main(&app, |a| popup::hide(a))
 }
 
 // ───────────── 9단계: 크롬 확장 (spec 6.6) ─────────────
 
-/// 시간이 걸리는 확장 작업은 WebView2 응답을 기다리므로 일꾼 스레드에서 한다
+/// 기다리는 일(WebView2 응답, 내려받기)은 일꾼 스레드에서 한다
 async fn blocking<T: Send + 'static>(f: impl FnOnce() -> Result<T, String> + Send + 'static) -> Result<T, String> {
     tauri::async_runtime::spawn_blocking(f).await.map_err(|e| e.to_string())?
 }
@@ -453,15 +450,12 @@ async fn ext_list(app: AppHandle) -> Vec<extensions::Info> {
 /// UI가 설치 확인 팝업(시안 M)을 띄우고, 답을 `ext_install_confirm`으로 보낸다.
 #[tauri::command]
 async fn ext_install_pick(app: AppHandle, folder: bool) -> Result<Option<extensions::Info>, String> {
-    let picked = on_main(&app, move |a| {
-        let owner = a.get_window(MAIN_WINDOW).and_then(|w| w.hwnd().ok()).map(|h| h.0 as isize);
-        extensions::pick(owner, folder)
-    })?;
+    let picked = on_main(&app, move |a| extensions::pick(browser::main_hwnd(a), folder))?;
     let Some(path) = picked else { return Ok(None) };
     let app2 = app.clone();
     let info = blocking(move || extensions::prepare(&app2, &path)).await?;
     // 접힌 사이드바의 팝업에서 눌렀어도 설치 확인은 UI가 띄운다
-    let _ = app.emit_to(EventTarget::webview(UI_WEBVIEW), "install_ready", &info);
+    browser::emit_ui(&app, "install_ready", &info);
     Ok(Some(info))
 }
 
@@ -474,7 +468,7 @@ async fn ext_install_confirm(app: AppHandle, accept: bool) -> Result<(), String>
     let r = blocking(move || extensions::confirm(&app2, pending, accept)).await;
     if let Err(e) = &r {
         // 팝업은 이미 닫혔으므로 UI의 알림 자리에 보인다
-        let _ = app.emit_to(EventTarget::webview(UI_WEBVIEW), "notice", e);
+        browser::emit_ui(&app, "notice", e);
     }
     r
 }
@@ -587,13 +581,9 @@ async fn scripts_list(app: AppHandle) -> Vec<scripts::ScriptInfo> {
 async fn script_set_enabled(app: AppHandle, id: String, enabled: bool, confirmed: Option<bool>) -> Result<(), String> {
     let (dir, has_overrides) = script_dir(&app, &id)?;
     if enabled && confirmed != Some(true) {
-        let prompt = {
-            let store = app.state::<site_scripts::ScriptStore>();
-            let all = store.0.lock().unwrap();
-            all.iter().find(|s| s.manifest.id == id).filter(|s| s.needs_confirm()).map(site_scripts::prompt_info)
-        };
-        if let Some(info) = prompt {
-            let _ = app.emit_to(tauri::EventTarget::webview(browser::UI_WEBVIEW), "install_ready", info);
+        let prompt = site_scripts::with_script(&app, &id, |s| s.needs_confirm().then(|| site_scripts::prompt_info(s)));
+        if let Some(info) = prompt.flatten() {
+            browser::emit_ui(&app, "install_ready", info);
             return Ok(());
         }
     }
@@ -621,12 +611,7 @@ async fn script_get(app: AppHandle, id: String) -> Option<scripts::ScriptInfo> {
 /// 설정 값 하나를 바꾼다. 열린 페이지에도 알린다 (tbs.onSettingsChanged)
 #[tauri::command]
 async fn script_set_value(app: AppHandle, id: String, key: String, value: serde_json::Value) -> Result<(), String> {
-    {
-        let store = app.state::<site_scripts::ScriptStore>();
-        let all = store.0.lock().unwrap();
-        let s = all.iter().find(|s| s.manifest.id == id).ok_or("스크립트를 찾지 못했습니다. \"다시 불러오기\"를 눌러 주세요.")?;
-        scripts::set_value(s, &key, &value)?;
-    }
+    site_scripts::with_script(&app, &id, |s| scripts::set_value(s, &key, &value)).ok_or(site_scripts::NOT_FOUND)??;
     on_main(&app, move |a| site_scripts::settings_changed(a, &id))
 }
 
@@ -662,13 +647,13 @@ async fn script_remove(app: AppHandle, id: String) -> Result<(), String> {
 /// 찾아보기 목록. `refresh`면 새로 받는다
 #[tauri::command]
 async fn store_list(refresh: bool) -> Result<Vec<serde_json::Value>, String> {
-    tauri::async_runtime::spawn_blocking(move || store::list_json(refresh)).await.map_err(|e| e.to_string())?
+    blocking(move || store::list_json(refresh)).await
 }
 
 /// "설치"·"업데이트": 확인 창을 띄우거나(권한이 늘지 않은 업데이트는 바로) 설치한다
 #[tauri::command]
 async fn store_install(app: AppHandle, id: String) -> Result<(), String> {
-    tauri::async_runtime::spawn_blocking(move || store::begin(&app, &id)).await.map_err(|e| e.to_string())?
+    blocking(move || store::begin(&app, &id)).await
 }
 
 /// 설치·업데이트 확인 창의 답
@@ -695,13 +680,9 @@ async fn scripts_open_folder() -> Result<(), String> {
     std::process::Command::new("explorer.exe").arg(&dir).spawn().map(|_| ()).map_err(|e| format!("폴더를 열지 못했습니다({e})."))
 }
 
+/// 스크립트의 (폴더, 리소스 바꿔치기가 있는지)
 fn script_dir(app: &AppHandle, id: &str) -> Result<(std::path::PathBuf, bool), String> {
-    let store = app.state::<site_scripts::ScriptStore>();
-    let all = store.0.lock().unwrap();
-    all.iter()
-        .find(|s| s.manifest.id == id)
-        .map(|s| (s.dir.clone(), !s.manifest.resource_overrides.is_empty()))
-        .ok_or_else(|| "스크립트를 찾지 못했습니다. \"다시 불러오기\"를 눌러 주세요.".to_string())
+    site_scripts::with_script(app, id, |s| (s.dir.clone(), !s.manifest.resource_overrides.is_empty())).ok_or_else(|| site_scripts::NOT_FOUND.to_string())
 }
 
 fn main() {
@@ -854,7 +835,7 @@ fn main() {
                         let _ = h.run_on_main_thread(move || popup::hide(&h2));
                     }
                     if let tauri::WindowEvent::Resized(_) = e {
-                        let _ = h.emit_to(EventTarget::webview(UI_WEBVIEW), "window_maximized", w2.is_maximized().unwrap_or(false));
+                        browser::emit_ui(&h, "window_maximized", w2.is_maximized().unwrap_or(false));
                     }
                 });
             }

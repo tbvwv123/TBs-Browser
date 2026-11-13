@@ -5,10 +5,10 @@
 use std::cell::RefCell;
 
 use serde::Serialize;
-use tauri::{AppHandle, Emitter, EventTarget, Url};
+use tauri::{AppHandle, Url};
 use webview2_com::Microsoft::Web::WebView2::Win32::{ICoreWebView2Deferral, ICoreWebView2PermissionRequestedEventArgs};
 
-use crate::{browser::UI_WEBVIEW, native, settings, state::TabId};
+use crate::{native, settings, state::TabId};
 
 struct Pending {
     tab: TabId,
@@ -97,7 +97,7 @@ fn finish(p: &Pending, allow: Option<bool>) {
 }
 
 fn emit(app: &AppHandle) {
-    let _ = app.emit_to(EventTarget::webview(UI_WEBVIEW), "permission_requests", list());
+    crate::browser::emit_ui(app, "permission_requests", list());
 }
 
 /// 같은 탭, 같은 사이트의 요청을 한 질문으로 묶는다 (카메라와 마이크를 함께 묻는 경우가 많다)

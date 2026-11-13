@@ -9,13 +9,12 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc, sync::Mutex};
 
 use serde_json::{json, Value};
-use tauri::{AppHandle, Emitter, EventTarget, Manager};
+use tauri::{AppHandle, Manager};
 use webview2_com::{Microsoft::Web::WebView2::Win32::*, *};
 use std::result::Result;
 use windows::core::{Interface, HSTRING, PWSTR};
 
 use crate::{
-    browser::UI_WEBVIEW,
     downloads, native, paths,
     scripts::{self, Keys, Permission, Script, ScriptInfo},
     settings,
@@ -61,6 +60,13 @@ fn store(app: &AppHandle) -> tauri::State<'_, ScriptStore> {
     app.state::<ScriptStore>()
 }
 
+pub const NOT_FOUND: &str = "스크립트를 찾지 못했습니다. \"다시 불러오기\"를 눌러 주세요.";
+
+/// id로 스크립트를 찾아 `f`에 넘긴다 (없으면 None). `f` 안에서 스크립트 목록을 다시 잠그면 안 된다.
+pub fn with_script<T>(app: &AppHandle, id: &str, f: impl FnOnce(&Script) -> T) -> Option<T> {
+    store(app).0.lock().unwrap().iter().find(|s| s.manifest.id == id).map(f)
+}
+
 pub fn list(app: &AppHandle) -> Vec<ScriptInfo> {
     store(app)
         .0
@@ -84,8 +90,8 @@ pub fn reload(app: &AppHandle) {
         .flat_map(|s| s.keys.iter().map(|(k, id)| KeyEntry { keys: *k, script: s.manifest.id.clone(), shortcut: id.clone(), matches: s.manifest.matches.clone() }))
         .collect();
     *store(app).0.lock().unwrap() = loaded;
-    let _ = app.emit_to(EventTarget::webview(UI_WEBVIEW), "scripts_changed", list(app));
-    let _ = app.emit_to(EventTarget::webview(crate::popup::LABEL), "scripts_changed", list(app));
+    crate::browser::emit_ui(app, "scripts_changed", list(app));
+    crate::popup::emit(app, "scripts_changed", list(app));
 }
 
 /// 스크립트 폴더의 모양: 폴더 이름과 script.json 수정 시각 (점으로 시작하는 임시 폴더는 뺀다)
@@ -192,33 +198,34 @@ pub fn apply(app: &AppHandle, id: TabId, core: &ICoreWebView2, then: Box<dyn FnO
         return;
     }
     // 마지막 등록이 끝나면 then을 부른다
-    let left = Rc::new(RefCell::new((codes.len(), Some(then))));
+    let left: Countdown = Rc::new(RefCell::new((codes.len(), Some(then))));
     for code in codes {
         let left_cb = left.clone();
         let handler = AddScriptToExecuteOnDocumentCreatedCompletedHandler::create(Box::new(move |err, sid| {
             if err.is_ok() {
                 REGISTERED.with(|r| r.borrow_mut().entry(id).or_default().push(sid));
             }
-            let mut l = left_cb.borrow_mut();
-            l.0 -= 1;
-            if l.0 == 0 {
-                if let Some(f) = l.1.take() {
-                    drop(l);
-                    f();
-                }
-            }
+            count_down(&left_cb);
             Ok(())
         }));
         if unsafe { core.AddScriptToExecuteOnDocumentCreated(&HSTRING::from(code), &handler) }.is_err() {
-            let mut l = left.borrow_mut();
-            l.0 -= 1;
-            if l.0 == 0 {
-                if let Some(f) = l.1.take() {
-                    drop(l);
-                    f();
-                }
-            }
+            count_down(&left);
         }
+    }
+}
+
+/// (남은 등록 수, 다 끝나면 부를 것)
+type Countdown = Rc<RefCell<(usize, Option<Box<dyn FnOnce()>>)>>;
+
+/// 등록 하나가 끝났다 (됐든 안 됐든). 마지막이면 맡아 둔 것을 부른다
+fn count_down(left: &Countdown) {
+    let then = {
+        let mut l = left.borrow_mut();
+        l.0 -= 1;
+        if l.0 == 0 { l.1.take() } else { None }
+    };
+    if let Some(f) = then {
+        f();
     }
 }
 
@@ -300,8 +307,7 @@ pub fn dispatch(core: &ICoreWebView2, script: &str, kind: &str, name: &str) {
 
 /// 설정 값이 바뀌었음을 열린 탭에 알린다 (tbs.onSettingsChanged)
 pub fn broadcast_settings(app: &AppHandle, script: &str) {
-    let values = store(app).0.lock().unwrap().iter().find(|s| s.manifest.id == script).map(|s| Value::Object(s.values.clone()));
-    let Some(values) = values else { return };
+    let Some(values) = with_script(app, script, |s| Value::Object(s.values.clone())) else { return };
     let msg = json!({ "__tbs_site_script_event": { "script": script, "kind": "settings", "data": values } }).to_string();
     for (_, c) in crate::browser::cores() {
         let _ = unsafe { c.PostWebMessageAsJson(&HSTRING::from(msg.as_str())) };
@@ -311,11 +317,11 @@ pub fn broadcast_settings(app: &AppHandle, script: &str) {
 /// "이 탭에서 실행": 켜져 있고 이 탭 주소에 맞는 스크립트의 그 동작만
 pub fn run_action(app: &AppHandle, tab: TabId, script: &str, action: &str) -> Result<(), String> {
     let url = crate::browser::snapshot(app).tabs.into_iter().find(|t| t.id == tab).map(|t| t.url).unwrap_or_default();
-    let ok = store(app).0.lock().unwrap().iter().any(|s| s.manifest.id == script && s.active() && s.applies_to(&url) && s.manifest.actions.iter().any(|a| a.id == action));
+    let ok = with_script(app, script, |s| s.active() && s.applies_to(&url) && s.manifest.actions.iter().any(|a| a.id == action)).unwrap_or(false);
     if !ok {
         return Err("이 탭에서는 그 동작을 실행할 수 없습니다. 스크립트가 켜져 있고 이 사이트에 맞는지 확인해 주세요.".into());
     }
-    let core = crate::browser::cores().into_iter().find(|(id, _)| *id == tab).map(|(_, c)| c).ok_or("탭이 아직 열리지 않았습니다. 탭을 한 번 눌러 연 뒤 다시 해 주세요.")?;
+    let core = crate::browser::core_of(tab).ok_or("탭이 아직 열리지 않았습니다. 탭을 한 번 눌러 연 뒤 다시 해 주세요.")?;
     dispatch(&core, script, "action", action);
     Ok(())
 }
@@ -328,13 +334,7 @@ pub fn handle_message(app: &AppHandle, tab: TabId, core: &ICoreWebView2, source:
     let rid = req.get("rid").cloned().unwrap_or(Value::Null);
     let kind = req.get("kind").and_then(Value::as_str).unwrap_or("");
     let data = req.get("data").cloned().unwrap_or(Value::Null);
-    let reply = |result: Result<Value, String>| {
-        let msg = match result {
-            Ok(r) => json!({ "__tbs_site_script_reply": { "script": script_id, "rid": rid, "ok": true, "result": r } }),
-            Err(e) => json!({ "__tbs_site_script_reply": { "script": script_id, "rid": rid, "ok": false, "error": e } }),
-        };
-        let _ = unsafe { core.PostWebMessageAsJson(&HSTRING::from(msg.to_string())) };
-    };
+    let reply = |result: Result<Value, String>| post_reply(core, &script_id, &rid, result);
     let perm = match kind {
         "screenshot" => Permission::Screenshot,
         "saveFile" => Permission::SaveFile,
@@ -344,13 +344,7 @@ pub fn handle_message(app: &AppHandle, tab: TabId, core: &ICoreWebView2, source:
         _ => return reply(Err(format!("\"{kind}\"은(는) 부탁할 수 없는 일입니다. screenshot, saveFile, copyText, tabs, storage, setSetting만 됩니다."))),
     };
     // 그 권한을 가진 켜진 스크립트이고, 보낸 페이지 주소가 그 스크립트의 matches에 맞아야 한다
-    let allowed = {
-        let s = store(app);
-        let all = s.0.lock().unwrap();
-        all.iter()
-            .find(|s| s.manifest.id == script_id)
-            .map(|s| (s.active() && s.manifest.permissions.contains(&perm) && s.applies_to(source), s.info().name, s.dir.clone()))
-    };
+    let allowed = with_script(app, &script_id, |s| (s.active() && s.manifest.permissions.contains(&perm) && s.applies_to(source), s.info().name, s.dir.clone()));
     let Some((true, name, dir)) = allowed else {
         crate::log::warn(format!("사이트 스크립트 부탁을 거절함: script={script_id} kind={kind} page={source}"));
         return reply(Err("이 페이지에서는 그 일을 부탁할 수 없습니다. 스크립트의 permissions와 matches를 확인해 주세요.".into()));
@@ -392,14 +386,7 @@ pub fn handle_message(app: &AppHandle, tab: TabId, core: &ICoreWebView2, source:
         Permission::Storage if kind == "setSetting" => {
             let key = data.get("key").and_then(Value::as_str).unwrap_or("").to_string();
             let value = data.get("value").cloned().unwrap_or(Value::Null);
-            let result = {
-                let s = store(app);
-                let all = s.0.lock().unwrap();
-                match all.iter().find(|s| s.manifest.id == script_id) {
-                    Some(sc) => scripts::set_value(sc, &key, &value),
-                    None => Err("스크립트를 찾지 못했습니다.".into()),
-                }
-            };
+            let result = with_script(app, &script_id, |s| scripts::set_value(s, &key, &value)).unwrap_or_else(|| Err("스크립트를 찾지 못했습니다.".into()));
             match result {
                 Ok(values) => {
                     reply(Ok(Value::Object(values)));
@@ -439,34 +426,28 @@ pub fn handle_message(app: &AppHandle, tab: TabId, core: &ICoreWebView2, source:
             let file = scripts::safe_file_name(&format!("{name} {}.png", stamp()));
             let rid2 = rid.clone();
             let sid = script_id.clone();
-            capture(core, Box::new(move |r| {
-                let result = r.and_then(|bytes| save(&app2, &src, &file, &bytes));
-                let msg = match result {
-                    Ok(r) => json!({ "__tbs_site_script_reply": { "script": sid, "rid": rid2, "ok": true, "result": r } }),
-                    Err(e) => json!({ "__tbs_site_script_reply": { "script": sid, "rid": rid2, "ok": false, "error": e } }),
-                };
-                let _ = unsafe { core2.PostWebMessageAsJson(&HSTRING::from(msg.to_string())) };
-            }));
+            capture(core, Box::new(move |r| post_reply(&core2, &sid, &rid2, r.and_then(|bytes| save(&app2, &src, &file, &bytes)))));
         }
     }
+}
+
+/// 페이지의 부탁에 답한다 (`rid`로 어느 부탁의 답인지 가린다)
+fn post_reply(core: &ICoreWebView2, script: &str, rid: &Value, result: Result<Value, String>) {
+    let msg = match result {
+        Ok(r) => json!({ "__tbs_site_script_reply": { "script": script, "rid": rid, "ok": true, "result": r } }),
+        Err(e) => json!({ "__tbs_site_script_reply": { "script": script, "rid": rid, "ok": false, "error": e } }),
+    };
+    let _ = unsafe { core.PostWebMessageAsJson(&HSTRING::from(msg.to_string())) };
 }
 
 /// 켜기 확인 창(시안 M)에 보낼 것. 크롬 확장 설치 확인과 같은 모양에 kind만 다르다
 pub fn prompt_info(s: &Script) -> Value {
     let m = &s.manifest;
-    let mut sites: Vec<String> = Vec::new();
-    for p in &m.matches {
-        let h = p.split_once("://").map(|(_, r)| r).unwrap_or(p).split('/').next().unwrap_or("");
-        let h = h.trim_start_matches("*.").trim_start_matches("www.").to_string();
-        if !h.is_empty() && h != "*" && !sites.contains(&h) {
-            sites.push(h);
-        }
-    }
     json!({
         "kind": "script", "mode": "enable",
         "id": m.id, "name": s.info().name, "version": m.version, "description": m.description, "author": m.author,
         "enabled": m.enabled, "pinned": m.pinned, "icon": s.icon, "popup": null, "options": null,
-        "matches": m.matches, "allSites": s.all_sites(), "sites": sites,
+        "matches": m.matches, "allSites": s.all_sites(), "sites": scripts::site_names(&m.matches),
         "permissions": m.permissions.iter().map(|p| p.sentence()).collect::<Vec<_>>(),
         "error": null, "updateFrom": null,
     })

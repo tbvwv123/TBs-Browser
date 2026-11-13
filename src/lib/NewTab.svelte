@@ -2,7 +2,7 @@
   // 새 탭 화면 (spec 4.7, 시안 I·J): 페이지 카드 가운데(살짝 위)에 검색·주소 입력 칸과 "자주 가는 곳" 바로가기.
   // 빈 탭에는 콘텐츠 웹뷰가 없어서 UI가 카드 자리에 직접 그린다. 자동완성 목록도 카드 안에 그린다.
   import { onMount, tick } from "svelte";
-  import { host, host4, host7, readableUrl, type Suggestion, type TopSite } from "./api";
+  import { host, readableUrl, type Suggestion, type TopSite } from "./api";
   import { ui, report } from "./store.svelte";
 
   let input: HTMLInputElement;
@@ -14,7 +14,7 @@
   let timer = 0;
 
   onMount(() => {
-    host7.topSites().then((s) => (sites = s), report);
+    host.topSites().then((s) => (sites = s), report);
     return () => clearTimeout(timer);
   });
 
@@ -39,7 +39,7 @@
       return;
     }
     timer = window.setTimeout(async () => {
-      const items = await host4.suggest(q).catch(() => []);
+      const items = await host.suggest(q).catch(() => []);
       if (text.trim() === q) suggestions = items;
     }, 60);
   }

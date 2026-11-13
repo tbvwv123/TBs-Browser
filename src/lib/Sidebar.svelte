@@ -5,8 +5,8 @@
   import TabRow from "./TabRow.svelte";
   import RenameInput from "./RenameInput.svelte";
   import ExtensionsPanel from "./ExtensionsPanel.svelte";
-  import { host, host9, type Group, type Tab } from "./api";
-  import { ui, report, moreMenuItems, openMenu, openMenuAbove, activeTab, setSidebarCollapsed, pinnedItems, token, type Pinned } from "./store.svelte";
+  import { host, type Group } from "./api";
+  import { ui, report, moreMenuItems, openMenu, openMenuAbove, activeTab, setSidebarCollapsed, pinnedItems, token, searchedTabs, tabBlocks, type Pinned } from "./store.svelte";
   import { dropMark, consumeDragClick } from "./drag";
 
   let { onNewTab }: { onNewTab: () => void } = $props();
@@ -17,26 +17,10 @@
   let stuck = $state(false);
   let thumb = $state({ top: 0, height: 100, on: false });
 
-  type Block = { kind: "tab"; tab: Tab } | { kind: "group"; group: Group; tabs: Tab[] };
-
   // 탭 검색: 제목과 주소에 그 글자가 들어간 탭만 남긴다 (spec 5.1)
   const query = $derived(ui.search.trim().toLowerCase());
-  const visibleTabs = $derived(
-    query ? ui.tabs.filter((t) => t.title.toLowerCase().includes(query) || t.url.toLowerCase().includes(query)) : ui.tabs,
-  );
-  const blocks = $derived.by(() => {
-    const out: Block[] = [];
-    for (const t of visibleTabs) {
-      const g = t.group === null ? null : ui.groups.find((x) => x.id === t.group);
-      if (!g) out.push({ kind: "tab", tab: t });
-      else {
-        const last = out[out.length - 1];
-        if (last?.kind === "group" && last.group.id === g.id) last.tabs.push(t);
-        else out.push({ kind: "group", group: g, tabs: [t] });
-      }
-    }
-    return out;
-  });
+  const visibleTabs = $derived(searchedTabs());
+  const blocks = $derived(tabBlocks(visibleTabs));
 
   // 스크롤 막대와 붙는 머리줄 아래 선 (시안 F의 measure)
   function measure() {
@@ -130,7 +114,7 @@
   function openPinned(e: MouseEvent, p: Pinned) {
     if (p.kind === "ext" && p.popup && p.enabled) {
       const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-      host9.extOpenPopup(p.id, r.left, r.top - 6).catch(report);
+      host.extOpenPopup(p.id, r.left, r.top - 6).catch(report);
     } else ui.scriptsOpen = !ui.scriptsOpen;
   }
 

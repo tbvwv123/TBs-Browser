@@ -3,7 +3,7 @@
   // 접힌 사이드바의 메뉴와 북마크 목록 (spec 4.6).
   // 창은 투명하고, 그림자를 그릴 여백(왼쪽·오른쪽·아래 16px)을 둔다.
   import { onMount, tick } from "svelte";
-  import { host4, host5, host9, host12, on, readableUrl, fileName, formatBytes, type Suggestion, type Download, type BookmarkNode, type ExtInfo, type ScriptInfo } from "./api";
+  import { host, on, readableUrl, fileName, formatBytes, type Suggestion, type Download, type BookmarkNode, type ExtInfo, type ScriptInfo } from "./api";
   import ExtensionsPanel from "./ExtensionsPanel.svelte";
   import InstallConfirm from "./InstallConfirm.svelte";
   import AdblockPopup from "./AdblockPopup.svelte";
@@ -30,7 +30,7 @@
   // 띄울 때마다 직접도 부른다 (창 크기는 띄울 때 다시 정해진다)
   function refit() {
     requestAnimationFrame(() => {
-      if (fitted) host9.popupFit(Math.ceil(fitted.getBoundingClientRect().height)).catch(() => {});
+      if (fitted) host.popupFit(Math.ceil(fitted.getBoundingClientRect().height)).catch(() => {});
     });
   }
   $effect(() => {
@@ -42,8 +42,8 @@
 
   function loadLists() {
     Promise.all([
-      host5.scriptsList().then((l) => (scripts = l)),
-      host9.extList().then((l) => (exts = l)),
+      host.scriptsList().then((l) => (scripts = l)),
+      host.extList().then((l) => (exts = l)),
     ]).then(() => tick().then(refit), (e) => (error = String(e)));
   }
 
@@ -76,9 +76,9 @@
 
   /** 스크립트 켜기 확인의 답: 켜기를 누르면 확인한 것으로 켠다 */
   async function answerScript(info: ExtInfo, accept: boolean) {
-    if (info.mode === "install" || info.mode === "update") await host12.storeConfirm(info.id, accept);
-    else if (accept) await host5.scriptSetEnabled(info.id, true, true);
-    await host4.popupHide();
+    if (info.mode === "install" || info.mode === "update") await host.storeConfirm(info.id, accept);
+    else if (accept) await host.scriptSetEnabled(info.id, true, true);
+    await host.popupHide();
   }
 </script>
 
@@ -100,8 +100,8 @@
         class="bm"
         style:padding-left="calc(10px + {depth} * var(--nested-indent) - {depth} * 10px)"
         title={readableUrl(node.url)}
-        onclick={(e) => act(host4.popupPick(node.url, e.ctrlKey))}
-        onauxclick={(e) => e.button === 1 && act(host4.popupPick(node.url, true))}
+        onclick={(e) => act(host.popupPick(node.url, e.ctrlKey))}
+        onauxclick={(e) => e.button === 1 && act(host.popupPick(node.url, true))}
       >
         {#if node.icon}
           <img class="bm-icon" src={node.icon} alt="" />
@@ -127,7 +127,7 @@
   </div>
 {:else if view?.kind === "install"}
   <div class="fit" bind:this={fitted}>
-    <InstallConfirm info={view.data.info} onAnswer={(a) => act(view?.kind === "install" && view.data.info.kind === "script" ? answerScript(view.data.info, a) : host9.extInstallConfirm(a))} />
+    <InstallConfirm info={view.data.info} onAnswer={(a) => act(view?.kind === "install" && view.data.info.kind === "script" ? answerScript(view.data.info, a) : host.extInstallConfirm(a))} />
   </div>
 {:else if view}
   <div
@@ -138,7 +138,7 @@
   >
     {#if view.kind === "menu"}
       {#each view.data.items as m, i}
-        <button class="item" class:danger={m.danger} role="menuitem" onclick={() => act(host4.popupMenuPick(i))}>
+        <button class="item" class:danger={m.danger} role="menuitem" onclick={() => act(host.popupMenuPick(i))}>
           {#if m.icon}
             <svg class="kind" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               {#each m.icon as d}<path {d}></path>{/each}
@@ -158,7 +158,7 @@
         <!-- 누르는 순간 고른다 (주소창이 포커스를 잃기 전에) -->
         <div class="item" class:selected={i === view.data.selected} role="option" aria-selected={i === view.data.selected} tabindex="-1" onpointerdown={(e) => {
             e.preventDefault();
-            act(host4.popupPick(s.url));
+            act(host.popupPick(s.url));
           }}>
           {#if s.kind === "bookmark"}
             <svg class="kind" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-label="북마크"><path d="M12 4l2.5 5 5.5.8-4 3.9.9 5.5-4.9-2.6-4.9 2.6.9-5.5-4-3.9 5.5-.8z"></path></svg>
@@ -174,8 +174,8 @@
         <div class="download">
           <div class="dl-top">
             <span class="title">{fileName(d.path)}</span>
-            <button class="link" onclick={() => act(host4.downloadShow(d.id))}>폴더 열기</button>
-            <button class="link" onclick={() => act(host4.downloadCancel(d.id))}>취소</button>
+            <button class="link" onclick={() => act(host.downloadShow(d.id))}>폴더 열기</button>
+            <button class="link" onclick={() => act(host.downloadCancel(d.id))}>취소</button>
           </div>
           <div class="bar" aria-hidden="true"><span style:width="{d.total > 0 ? Math.min(100, (d.received / d.total) * 100) : 0}%"></span></div>
           <span class="size">{formatBytes(d.received)} / {d.total > 0 ? formatBytes(d.total) : "크기 모름"}</span>

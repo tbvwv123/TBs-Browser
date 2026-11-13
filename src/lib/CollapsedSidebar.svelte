@@ -4,8 +4,8 @@
   // 44px 밖으로 나가는 것(메뉴, 북마크 목록)은 콘텐츠 위에 뜨는 팝업 창으로 띄운다.
   import { tick } from "svelte";
   import TabIcon from "./TabIcon.svelte";
-  import { host, host4, type BookmarkNode, type Group, type Tab } from "./api";
-  import { ui, report, activeTab, moreMenuItems, openMenu, openMenuAbove, tabLabel, tabMenu, setSidebarCollapsed, token } from "./store.svelte";
+  import { host, type BookmarkNode, type Group, type Tab } from "./api";
+  import { ui, report, activeTab, moreMenuItems, openMenu, openMenuAbove, tabLabel, tabMenu, setSidebarCollapsed, token, searchedTabs, tabBlocks } from "./store.svelte";
   import { startDrag, consumeDragClick, dropMark } from "./drag";
 
   let { onNewTab, onSearch }: { onNewTab: () => void; onSearch: () => void } = $props();
@@ -14,24 +14,9 @@
   let scrolled = $state(false);
   let bookmarksButton: HTMLButtonElement;
 
-  type Block = { kind: "tab"; tab: Tab } | { kind: "group"; group: Group; tabs: Tab[] };
-
   // 탭 검색 글자가 남아 있으면 접힌 상태에서도 그 탭만 보인다 (spec 5.1)
   const query = $derived(ui.search.trim().toLowerCase());
-  const blocks = $derived.by(() => {
-    const tabs = query ? ui.tabs.filter((t) => t.title.toLowerCase().includes(query) || t.url.toLowerCase().includes(query)) : ui.tabs;
-    const out: Block[] = [];
-    for (const t of tabs) {
-      const g = t.group === null ? null : ui.groups.find((x) => x.id === t.group);
-      if (!g) out.push({ kind: "tab", tab: t });
-      else {
-        const last = out[out.length - 1];
-        if (last?.kind === "group" && last.group.id === g.id) last.tabs.push(t);
-        else out.push({ kind: "group", group: g, tabs: [t] });
-      }
-    }
-    return out;
-  });
+  const blocks = $derived(tabBlocks(searchedTabs()));
 
   // 탭을 바꾸면 그 탭이 보이도록 목록이 따라간다 (spec 5.1)
   $effect(() => {
@@ -86,7 +71,7 @@
     const rows = Math.max(1, visibleRows(ui.bookmarks.items));
     const rowH = token("--bookmark-row-height") + token("--tab-row-gap");
     const h = Math.min(window.innerHeight - r.top - 24, 8 + rows * rowH);
-    host4.popupShow("bookmarks", { x: r.right + 4, y: r.top, w: token("--bookmarks-popup-width"), h }, { items: ui.bookmarks.items }).catch(report);
+    host.popupShow("bookmarks", { x: r.right + 4, y: r.top, w: token("--bookmarks-popup-width"), h }, { items: ui.bookmarks.items }).catch(report);
   }
 
   // 확장 프로그램 버튼: 고정 아이콘은 보이지 않고 이 안으로 들어간다 (spec 4.6, 시안 K).
@@ -98,7 +83,7 @@
     const h = Math.min(420, r.bottom - 8);
     const x = r.right + 4;
     const anchor = { x: x + w + 8, bottom: r.bottom };
-    host4.popupShow("extensions", { x, y: Math.max(8, r.bottom - h), w, h }, { url: activeTab()?.url ?? "", anchor }).catch(report);
+    host.popupShow("extensions", { x, y: Math.max(8, r.bottom - h), w, h }, { url: activeTab()?.url ?? "", anchor }).catch(report);
   }
 
   function moreMenu(e: MouseEvent) {

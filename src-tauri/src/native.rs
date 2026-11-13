@@ -98,6 +98,13 @@ pub fn history(core: &ICoreWebView2) -> (bool, bool) {
     (b.as_bool(), f.as_bool())
 }
 
+/// 주소로 이동한다
+pub fn navigate(core: &ICoreWebView2, url: &str) {
+    unsafe {
+        let _ = core.Navigate(&windows::core::HSTRING::from(url));
+    }
+}
+
 /// 비밀번호 저장과 자동 입력을 켠다. 웹뷰마다 따로라 만들 때마다 부른다 (0단계 11번).
 pub fn enable_autofill(core: &ICoreWebView2) {
     unsafe {

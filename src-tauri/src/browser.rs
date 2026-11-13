@@ -12,11 +12,11 @@ use webview2_com::Microsoft::Web::WebView2::Win32::{
 };
 
 use crate::{
-    dev, downloads,
+    adblock, dev, downloads, ext_compat, extensions,
     history::{now_ms, History},
-    input, library, memory,
+    input, library, log, memory,
     native::{self, Event, MainOnly},
-    paths, permissions, session, shortcuts, site_scripts,
+    paths, permissions, popup, session, shortcuts, site_scripts,
     state::{GroupId, Session, Snapshot, Tab, TabId, Tabs},
 };
 
@@ -114,13 +114,24 @@ fn browser(app: &AppHandle) -> tauri::State<'_, Browser> {
     app.state::<Browser>()
 }
 
-fn core(id: TabId) -> Option<ICoreWebView2> {
+/// 탭의 WebView2 객체 (웹뷰가 없으면 None). 메인 스레드에서만.
+pub fn core_of(id: TabId) -> Option<ICoreWebView2> {
     HOOKS.with(|h| h.borrow().get(&id).map(|h| h.core.clone()))
 }
 
-/// 탭의 WebView2 객체 (웹뷰가 없으면 None). 메인 스레드에서만.
-pub fn core_of(id: TabId) -> Option<ICoreWebView2> {
-    core(id)
+/// 메인 창의 핸들 (파일·폴더 고르기 창의 주인)
+pub fn main_hwnd(app: &AppHandle) -> Option<isize> {
+    app.get_window(MAIN_WINDOW).and_then(|w| w.hwnd().ok()).map(|h| h.0 as isize)
+}
+
+/// 탭 하나의 지금 값 (없으면 None)
+fn tab_of(app: &AppHandle, id: TabId) -> Option<Tab> {
+    browser(app).tabs.lock().unwrap().get(id).cloned()
+}
+
+/// 탭 하나를 고친다 (없으면 None). UI에 알리는 일은 부르는 쪽이 한다.
+fn with_tab<T>(app: &AppHandle, id: TabId, f: impl FnOnce(&mut Tab) -> T) -> Option<T> {
+    browser(app).tabs.lock().unwrap().get_mut(id).map(f)
 }
 
 /// 웹뷰가 있는 탭들 (버린 탭과 아직 안 불러온 탭은 빠진다)
@@ -131,51 +142,45 @@ pub fn loaded_tabs() -> Vec<TabId> {
 /// 메모리 정책의 "버림": 웹뷰를 닫고 주소·제목·파비콘만 남긴다 (spec 7장)
 pub fn discard(app: &AppHandle, id: TabId) {
     drop_webview(app, id);
-    {
-        let b = browser(app);
-        let mut tabs = b.tabs.lock().unwrap();
-        if let Some(t) = tabs.get_mut(id) {
-            t.loading = false;
-            t.audible = false;
-        }
-    }
+    with_tab(app, id, |t| {
+        t.loading = false;
+        t.audible = false;
+    });
     emit_tab(app, id);
 }
 
 /// "항상 유지" 표시 (탭 오른쪽 클릭 메뉴)
 pub fn set_keep_alive(app: &AppHandle, id: TabId, keep: bool) {
-    {
-        let b = browser(app);
-        let mut tabs = b.tabs.lock().unwrap();
-        if let Some(t) = tabs.get_mut(id) {
-            t.keep_alive = keep;
-        }
-    }
+    with_tab(app, id, |t| t.keep_alive = keep);
     emit_tab(app, id);
 }
 
 // ───────────── UI로 보내는 이벤트 ─────────────
+
+/// UI 웹뷰에 이벤트를 보낸다
+pub fn emit_ui<S: serde::Serialize + Clone>(app: &AppHandle, event: &str, payload: S) {
+    let _ = app.emit_to(EventTarget::webview(UI_WEBVIEW), event, payload);
+}
 
 pub fn snapshot(app: &AppHandle) -> Snapshot {
     browser(app).tabs.lock().unwrap().snapshot()
 }
 
 fn emit_all(app: &AppHandle) {
-    let _ = app.emit_to(EventTarget::webview(UI_WEBVIEW), "tabs_changed", snapshot(app));
+    emit_ui(app, "tabs_changed", snapshot(app));
     session::touch();
 }
 
 fn emit_tab(app: &AppHandle, id: TabId) {
-    let tab: Option<Tab> = browser(app).tabs.lock().unwrap().get(id).cloned();
-    if let Some(tab) = tab {
-        let _ = app.emit_to(EventTarget::webview(UI_WEBVIEW), "tab_updated", tab);
+    if let Some(tab) = tab_of(app, id) {
+        emit_ui(app, "tab_updated", tab);
         session::touch();
     }
 }
 
 /// 세션 파일에 남길 모양
 pub fn session(app: &AppHandle) -> Session {
-    let collapsed = *browser(app).sidebar_collapsed.lock().unwrap();
+    let collapsed = sidebar_collapsed(app);
     browser(app).tabs.lock().unwrap().to_session(collapsed)
 }
 
@@ -186,8 +191,8 @@ pub fn sidebar_collapsed(app: &AppHandle) -> bool {
 /// 사이드바 접기·펼치기 (spec 4.6). UI가 카드 자리를 다시 알려 온다.
 pub fn set_sidebar_collapsed(app: &AppHandle, collapsed: bool) {
     *browser(app).sidebar_collapsed.lock().unwrap() = collapsed;
-    crate::popup::hide(app);
-    let _ = app.emit_to(EventTarget::webview(UI_WEBVIEW), "sidebar_collapsed", collapsed);
+    popup::hide(app);
+    emit_ui(app, "sidebar_collapsed", collapsed);
     session::touch();
 }
 
@@ -214,7 +219,7 @@ fn load_if_needed(app: &AppHandle, id: TabId) {
     if webview(app, id).is_some() {
         return;
     }
-    let url = browser(app).tabs.lock().unwrap().get(id).map(|t| t.url.clone()).unwrap_or_default();
+    let url = tab_of(app, id).map(|t| t.url).unwrap_or_default();
     if url.is_empty() || input::is_internal_page(&url) {
         return;
     }
@@ -309,7 +314,7 @@ pub fn bookmark_active(app: &AppHandle) {
 pub fn toggle_fullscreen(app: &AppHandle) {
     let page = *browser(app).page_fullscreen.lock().unwrap();
     if let Some(t) = page {
-        if let Some(c) = core(t) {
+        if let Some(c) = core_of(t) {
             native::exit_fullscreen(&c);
         }
         set_page_fullscreen(app, t, false);
@@ -359,8 +364,8 @@ fn apply_fullscreen(app: &AppHandle) {
             }
         }
     }
-    crate::popup::hide(app);
-    let _ = app.emit_to(EventTarget::webview(UI_WEBVIEW), "fullscreen", on);
+    popup::hide(app);
+    emit_ui(app, "fullscreen", on);
 }
 
 pub fn is_fullscreen(app: &AppHandle) -> bool {
@@ -398,7 +403,7 @@ pub fn focus_page(app: &AppHandle) {
 
 /// UI에 포커스가 있을 때 F12: 지금 보는 페이지의 개발자 도구
 pub fn open_devtools(app: &AppHandle) {
-    if let Some(c) = snapshot(app).active.and_then(core) {
+    if let Some(c) = snapshot(app).active.and_then(core_of) {
         let _ = unsafe { c.OpenDevToolsWindow() };
     }
 }
@@ -442,19 +447,14 @@ pub fn navigate(app: &AppHandle, id: TabId, url: Url) -> Result<(), String> {
     let internal = input::is_internal_page(url.as_str());
     HOME.with(|h| h.borrow_mut().remove(&id));
     HOME_AHEAD.with(|h| h.borrow_mut().remove(&id));
-    {
-        let b = browser(app);
-        let mut tabs = b.tabs.lock().unwrap();
-        let tab = tabs.get_mut(id).ok_or("탭을 찾지 못했습니다. 탭 목록에서 다시 골라 주세요.")?;
+    with_tab(app, id, |tab| {
+        if internal {
+            tab.clear_page();
+        }
         tab.url = url.to_string();
         tab.loading = !internal;
-        if internal {
-            tab.title.clear();
-            tab.favicon = None;
-            tab.can_go_back = false;
-            tab.can_go_forward = false;
-        }
-    }
+    })
+    .ok_or("탭을 찾지 못했습니다. 탭 목록에서 다시 골라 주세요.")?;
     emit_tab(app, id);
     if internal {
         // 내부 페이지는 UI가 카드 자리에 그린다. 콘텐츠 웹뷰는 쓰지 않는다 (spec 3장)
@@ -494,7 +494,7 @@ fn drop_webview(app: &AppHandle, id: TabId) {
             downloads::detach(&h.core, t);
         }
         if let Some(t) = ADBLOCK_TOKENS.with(|d| d.borrow_mut().remove(&id)) {
-            crate::adblock::detach(&h.core, id, t);
+            adblock::detach(&h.core, id, t);
         }
         if let Some(t) = OVERRIDE_TOKENS.with(|d| d.borrow_mut().remove(&id)) {
             site_scripts::detach_overrides(&h.core, t);
@@ -517,7 +517,7 @@ pub fn cores() -> Vec<(TabId, ICoreWebView2)> {
 /// 사이트 스크립트를 켜고 끄거나 다시 불러온 뒤, 열린 탭마다 등록을 새로 한다.
 /// 열린 탭은 새로고침 뒤에 반영된다 (spec 6.2). 바꿔치기가 있으면 디스크 캐시를 비운다.
 pub fn reapply_scripts(app: &AppHandle, clear_cache: bool) {
-    let cores: Vec<(TabId, ICoreWebView2)> = HOOKS.with(|h| h.borrow().iter().map(|(id, h)| (*id, h.core.clone())).collect());
+    let cores = cores();
     for (id, c) in &cores {
         site_scripts::apply(app, *id, c, Box::new(|| {}));
     }
@@ -533,17 +533,13 @@ pub fn go_back(app: &AppHandle, id: TabId) {
         // 홈에서 뒤로: 밑의 페이지를 되돌린다
         HOME_AHEAD.with(|h| h.borrow_mut().insert(id));
         let url = under.url.clone();
-        {
-            let b = browser(app);
-            let mut tabs = b.tabs.lock().unwrap();
-            if let Some(t) = tabs.get_mut(id) {
-                t.url = under.url;
-                t.title = under.title;
-                t.favicon = under.favicon;
-                t.can_go_back = under.can_go_back;
-                t.can_go_forward = true;
-            }
-        }
+        with_tab(app, id, |t| {
+            t.url = under.url;
+            t.title = under.title;
+            t.favicon = under.favicon;
+            t.can_go_back = under.can_go_back;
+            t.can_go_forward = true;
+        });
         // 메모리 관리로 웹뷰를 버렸으면 다시 연다
         if webview(app, id).is_none() {
             if let Ok(u) = Url::parse(&url) {
@@ -554,25 +550,25 @@ pub fn go_back(app: &AppHandle, id: TabId) {
         emit_tab(app, id);
         return;
     }
-    if let Some(c) = core(id) {
+    if let Some(c) = core_of(id) {
         let _ = unsafe { c.GoBack() };
     }
 }
 
 pub fn go_forward(app: &AppHandle, id: TabId) {
-    let can = browser(app).tabs.lock().unwrap().get(id).is_some_and(|t| t.can_go_forward);
-    if HOME_AHEAD.with(|h| h.borrow().contains(&id)) && !core(id).is_some_and(|c| native::history(&c).1) && can {
+    let can = tab_of(app, id).is_some_and(|t| t.can_go_forward);
+    if HOME_AHEAD.with(|h| h.borrow().contains(&id)) && !core_of(id).is_some_and(|c| native::history(&c).1) && can {
         return go_home(app, id);
     }
-    if let Some(c) = core(id) {
+    if let Some(c) = core_of(id) {
         let _ = unsafe { c.GoForward() };
     }
 }
 
 /// "홈": 이 탭에 새 탭 화면을 띄운다. 웹 페이지의 웹뷰와 기록은 남겨 두어 뒤로 가면 돌아온다
 pub fn go_home(app: &AppHandle, id: TabId) {
-    let Some(tab) = browser(app).tabs.lock().unwrap().get(id).cloned() else { return };
-    if tab.url.is_empty() || HOME.with(|h| h.borrow().contains_key(&id)) {
+    let Some(tab) = tab_of(app, id) else { return };
+    if tab.url.is_empty() || at_home(id) {
         return;
     }
     if webview(app, id).is_none() || input::is_internal_page(&tab.url) {
@@ -580,18 +576,10 @@ pub fn go_home(app: &AppHandle, id: TabId) {
     }
     HOME_AHEAD.with(|h| h.borrow_mut().remove(&id));
     HOME.with(|h| h.borrow_mut().insert(id, tab));
-    {
-        let b = browser(app);
-        let mut tabs = b.tabs.lock().unwrap();
-        if let Some(t) = tabs.get_mut(id) {
-            t.url.clear();
-            t.title.clear();
-            t.favicon = None;
-            t.loading = false;
-            t.can_go_back = true;
-            t.can_go_forward = false;
-        }
-    }
+    with_tab(app, id, |t| {
+        t.clear_page();
+        t.can_go_back = true;
+    });
     layout(app);
     emit_tab(app, id);
 }
@@ -601,7 +589,7 @@ fn at_home(id: TabId) -> bool {
 }
 
 pub fn stop(id: TabId) {
-    if let Some(c) = core(id) {
+    if let Some(c) = core_of(id) {
         let _ = unsafe { c.Stop() };
     }
 }
@@ -655,11 +643,11 @@ fn layout(app: &AppHandle) {
     let prev = std::mem::replace(&mut *browser(app).last_active.lock().unwrap(), active);
     if prev != active {
         // 확장 팝업은 연 탭 기준으로 그려지므로 탭을 바꾸면 닫는다
-        later(app, crate::popup::close_extension);
+        later(app, popup::close_extension);
         // 전체 화면이던 영상 탭에서 떠나면 그 전체 화면을 끈다
         let page = *browser(app).page_fullscreen.lock().unwrap();
         if let Some(t) = page.filter(|t| Some(*t) != active) {
-            if let Some(c) = core(t) {
+            if let Some(c) = core_of(t) {
                 native::exit_fullscreen(&c);
             }
             *browser(app).page_fullscreen.lock().unwrap() = None;
@@ -731,7 +719,7 @@ fn create_webview(app: &AppHandle, id: TabId, url: Option<Url>, focus: bool, aft
             Ok(h) => HOOKS.with(|m| {
                 m.borrow_mut().insert(id, h);
             }),
-            Err(e) => crate::log::error(format!("탭 {id}의 처리기를 걸지 못함: {e:?}")),
+            Err(e) => log::error(format!("탭 {id}의 처리기를 걸지 못함: {e:?}")),
         }
         if let Some(t) = downloads::attach(&app2, &core, id) {
             DOWNLOAD_TOKENS.with(|d| d.borrow_mut().insert(id, t));
@@ -741,7 +729,7 @@ fn create_webview(app: &AppHandle, id: TabId, url: Option<Url>, focus: bool, aft
             let _ = core.AddScriptToExecuteOnDocumentCreated(&windows::core::HSTRING::from(NAV_BUTTONS_JS), None);
         }
         // 광고 차단 (spec 6.7): 요청 처리기와 화면 숨기기 스크립트
-        if let Some(t) = crate::adblock::attach(&app2, &core, p.environment(), id) {
+        if let Some(t) = adblock::attach(&app2, &core, p.environment(), id) {
             ADBLOCK_TOKENS.with(|d| d.borrow_mut().insert(id, t));
         }
         if let Some(t) = site_scripts::attach_overrides(&app2, &core, p.environment()) {
@@ -759,10 +747,10 @@ fn create_webview(app: &AppHandle, id: TabId, url: Option<Url>, focus: bool, aft
             Box::new(move || {
                 if let Some(u) = url {
                     let c = core2.clone();
-                    crate::adblock::when_ready(
+                    adblock::when_ready(
                         &app4,
                         Box::new(move || {
-                            let _ = unsafe { c.Navigate(&windows::core::HSTRING::from(u.as_str())) };
+                            native::navigate(&c, u.as_str());
                         }),
                     );
                 }
@@ -782,7 +770,7 @@ fn on_event(app: &AppHandle, id: TabId, ev: Event) {
         Event::Shortcut(name) => return later(app, move |a| shortcuts::run(a, name)),
         Event::ScriptShortcut(script, sc) => {
             return later(app, move |_| {
-                if let Some(c) = core(id) {
+                if let Some(c) = core_of(id) {
                     site_scripts::dispatch(&c, &script, "shortcut", &sc);
                 }
             })
@@ -792,22 +780,22 @@ fn on_event(app: &AppHandle, id: TabId, ev: Event) {
             return later(app, move |a| if back { go_back(a, id) } else { go_forward(a, id) });
         }
         Event::Message(source, text) => {
-            if let Some(c) = core(id) {
+            if let Some(c) = core_of(id) {
                 // 탭에 연 확장 페이지(설정 등)의 호환 메시지 (spec 6.6)
-                if !crate::adblock::handle_message(&c, &source, &text) && !crate::ext_compat::handle_message(app, &c, &source, &text) {
+                if !adblock::handle_message(&c, &source, &text) && !ext_compat::handle_message(app, &c, &source, &text) {
                     site_scripts::handle_message(app, id, &c, &source, &text);
                 }
             }
             return;
         }
         Event::Navigating(uri) => {
-            if let Some(c) = core(id) {
-                crate::adblock::navigating(app, id, &c, &uri);
+            if let Some(c) = core_of(id) {
+                adblock::navigating(app, id, &c, &uri);
             }
             return;
         }
         // 확장이 만든 오른쪽 클릭 메뉴 항목을 넣는다 (spec 6.6)
-        Event::ContextMenu(args) => return crate::ext_compat::extend_menu(app, id, &args),
+        Event::ContextMenu(args) => return ext_compat::extend_menu(app, id, &args),
         Event::Completed(ok) => {
             if ok {
                 record_visit(app, id);
@@ -821,8 +809,8 @@ fn on_event(app: &AppHandle, id: TabId, ev: Event) {
         Event::GotFocus => {
             // 페이지를 누르면 떠 있는 팝업(메뉴, 북마크 목록 등)을 닫는다
             // 설치·권한 확인은 바깥을 눌러도 닫지 않는다 (시안 M)
-            if crate::popup::is_open() && !crate::popup::is_showing("install") {
-                later(app, crate::popup::hide);
+            if popup::is_open() && !popup::is_showing("install") {
+                later(app, popup::hide);
             }
             return;
         }
@@ -855,7 +843,7 @@ fn on_event(app: &AppHandle, id: TabId, ev: Event) {
             Event::Loading(l) => {
                 if l {
                     // 새 페이지: 막은 개수를 0부터
-                    crate::adblock::page_started(id);
+                    adblock::page_started(id);
                 }
                 tab.loading = l
             }
@@ -898,22 +886,20 @@ fn on_event(app: &AppHandle, id: TabId, ev: Event) {
 /// 확장 페이지를 연 탭이 WebView2의 빈 페이지로 넘어갔다 (확장을 껐거나, 업데이트하며 껐다 켰다).
 /// 확장이 켜져 있으면 그 페이지를 다시 연다. 꺼져 있으면 주소를 남긴 채 웹뷰만 닫고, 다시 켤 때 연다.
 fn extension_page_lost(app: &AppHandle, id: TabId) {
-    let url = browser(app).tabs.lock().unwrap().get(id).map(|t| t.url.clone()).unwrap_or_default();
+    let url = tab_of(app, id).map(|t| t.url).unwrap_or_default();
     let Some(ext) = url.strip_prefix("chrome-extension://").and_then(|r| r.split('/').next()).map(str::to_string) else {
         return to_blank(app, id);
     };
     let recent = RELOADED.with(|r| r.borrow().get(&id).is_some_and(|t| t.elapsed() < std::time::Duration::from_secs(5)));
-    if crate::extensions::is_enabled(app, &ext) && !recent {
+    if extensions::is_enabled(app, &ext) && !recent {
         RELOADED.with(|r| r.borrow_mut().insert(id, std::time::Instant::now()));
-        if let (Some(c), Ok(_)) = (core(id), Url::parse(&url)) {
-            let _ = unsafe { c.Navigate(&windows::core::HSTRING::from(url.as_str())) };
+        if let (Some(c), Ok(_)) = (core_of(id), Url::parse(&url)) {
+            native::navigate(&c, &url);
         }
         return;
     }
     drop_webview(app, id);
-    if let Some(t) = browser(app).tabs.lock().unwrap().get_mut(id) {
-        t.loading = false;
-    }
+    with_tab(app, id, |t| t.loading = false);
     layout(app);
     emit_tab(app, id);
 }
@@ -923,10 +909,8 @@ pub fn reload_extension_tabs(app: &AppHandle, ext: &str) {
     let prefix = format!("chrome-extension://{ext}/");
     let snap = snapshot(app);
     for t in snap.tabs.iter().filter(|t| t.url.starts_with(&prefix)) {
-        match core(t.id) {
-            Some(c) => {
-                let _ = unsafe { c.Navigate(&windows::core::HSTRING::from(t.url.as_str())) };
-            }
+        match core_of(t.id) {
+            Some(c) => native::navigate(&c, &t.url),
             None if Some(t.id) == snap.active => load_if_needed(app, t.id),
             None => {}
         }
@@ -935,16 +919,8 @@ pub fn reload_extension_tabs(app: &AppHandle, ext: &str) {
 
 /// 탭을 빈 탭(새 탭 화면)으로 되돌린다. 웹뷰는 닫는다.
 pub fn to_blank(app: &AppHandle, id: TabId) {
-    {
-        let b = browser(app);
-        let mut tabs = b.tabs.lock().unwrap();
-        let Some(t) = tabs.get_mut(id) else { return };
-        t.url.clear();
-        t.title.clear();
-        t.favicon = None;
-        t.loading = false;
-        t.can_go_back = false;
-        t.can_go_forward = false;
+    if with_tab(app, id, Tab::clear_page).is_none() {
+        return;
     }
     drop_webview(app, id);
     layout(app);
@@ -953,7 +929,7 @@ pub fn to_blank(app: &AppHandle, id: TabId) {
 
 /// 이동이 끝난 페이지의 주소, 제목, 시각을 남긴다 (spec 5.4). 같은 탭에서 같은 주소가 이어지면 한 번만.
 fn record_visit(app: &AppHandle, id: TabId) {
-    let Some(tab) = browser(app).tabs.lock().unwrap().get(id).cloned() else { return };
+    let Some(tab) = tab_of(app, id) else { return };
     if tab.url.is_empty() || tab.url == "about:blank" || tab.url.starts_with("chrome-extension:") || input::is_internal_page(&tab.url) {
         return;
     }
@@ -970,11 +946,7 @@ fn record_visit(app: &AppHandle, id: TabId) {
 /// 팝업으로 연 로그인 창 등이 `window.close()`를 부르면 그 탭을 닫는다. 닫은 뒤에는 바로 아래 탭,
 /// 곧 팝업을 연 탭이 선택된다 (팝업은 연 탭 바로 위에 생기므로).
 fn close_later(app: &AppHandle, id: TabId) {
-    let app = app.clone();
-    std::thread::spawn(move || {
-        let app2 = app.clone();
-        let _ = app.run_on_main_thread(move || close(&app2, id));
-    });
+    later(app, move |a| close(a, id));
 }
 
 /// 페이지가 새 창을 요청하거나 링크를 가운데 클릭하면, 현재 탭 바로 위에 새 탭으로 연다 (spec 5.1).
@@ -989,44 +961,36 @@ fn open_new_window(
     )>,
 ) {
     // WebView2 이벤트 처리기 안에서 웹뷰를 만들면 멈출 수 있어, 처리기가 끝난 뒤 메인 스레드에서 한다.
-    let app = app.clone();
-    std::thread::spawn(move || {
+    later(app, move |app| {
+        let req = req;
+        let (index, group) = {
+            let b = browser(app);
+            let tabs = b.tabs.lock().unwrap();
+            (tabs.index_of(opener).unwrap_or(0), tabs.get(opener).and_then(|t| t.group))
+        };
+        // 그룹 안의 탭에서 연 새 탭은 같은 그룹에 들어간다
+        let id = new_tab_in(app, index, group, true);
+        let fallback_url = Url::parse(&uri).ok();
         let app2 = app.clone();
-        let _ = app.run_on_main_thread(move || {
-            let req = req;
-            let (index, group) = {
-                let b = browser(&app2);
-                let tabs = b.tabs.lock().unwrap();
-                (tabs.index_of(opener).unwrap_or(0), tabs.get(opener).and_then(|t| t.group))
-            };
-            // 그룹 안의 탭에서 연 새 탭은 같은 그룹에 들어간다
-            let id = new_tab_in(&app2, index, group, true);
-            let fallback_url = Url::parse(&uri).ok();
-            let app3 = app2.clone();
-            let after: AfterCreate = MainOnly(Box::new(move |core: &ICoreWebView2| {
-                let (args, deferral) = req.0;
-                let ok = unsafe { args.SetNewWindow(core).is_ok() && args.SetHandled(true).is_ok() };
-                let _ = unsafe { deferral.Complete() };
-                if !ok {
-                    crate::log::error(format!("새 창 넘기기 실패, 주소로 다시 연다: {uri}"));
-                    if let Some(u) = Url::parse(&uri).ok().filter(|u| !input::is_app_internal(u)) {
-                        // 콜백 밖에서 이동한다
-                        let app4 = app3.clone();
-                        std::thread::spawn(move || {
-                            let app5 = app4.clone();
-                            let _ = app4.run_on_main_thread(move || {
-                                let _ = navigate(&app5, id, u);
-                            });
-                        });
-                    }
-                }
-            }));
-            if let Err(e) = create_webview(&app2, id, None, false, Some(after)) {
-                crate::log::error(format!("{e}"));
-                if let Some(u) = fallback_url {
-                    let _ = navigate(&app2, id, u);
+        let after: AfterCreate = MainOnly(Box::new(move |core: &ICoreWebView2| {
+            let (args, deferral) = req.0;
+            let ok = unsafe { args.SetNewWindow(core).is_ok() && args.SetHandled(true).is_ok() };
+            let _ = unsafe { deferral.Complete() };
+            if !ok {
+                log::error(format!("새 창 넘기기 실패, 주소로 다시 연다: {uri}"));
+                if let Some(u) = Url::parse(&uri).ok().filter(|u| !input::is_app_internal(u)) {
+                    // 콜백 밖에서 이동한다
+                    later(&app2, move |a| {
+                        let _ = navigate(a, id, u);
+                    });
                 }
             }
-        });
+        }));
+        if let Err(e) = create_webview(app, id, None, false, Some(after)) {
+            log::error(format!("{e}"));
+            if let Some(u) = fallback_url {
+                let _ = navigate(app, id, u);
+            }
+        }
     });
 }

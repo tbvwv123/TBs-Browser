@@ -5,7 +5,7 @@
   import "./page.css";
   import { onMount } from "svelte";
   import InstalledList from "./InstalledList.svelte";
-  import { host, host5, host9, host12, newerVersion, on, type StoreEntry } from "../api";
+  import { host, newerVersion, on, matchSites, sitesLabel, type StoreEntry } from "../api";
   import { ui, report, activeTab } from "../store.svelte";
 
   let { tab }: { tab: "installed" | "store" } = $props();
@@ -18,7 +18,7 @@
 
   function pick(folder: boolean) {
     installChoice = false;
-    host9.extInstallPick(folder).catch(report);
+    host.extInstallPick(folder).catch(report);
   }
 
   let entries = $state<StoreEntry[] | null>(null);
@@ -29,7 +29,7 @@
   async function load(refresh: boolean) {
     failed = false;
     try {
-      entries = await host12.storeList(refresh);
+      entries = await host.storeList(refresh);
     } catch {
       failed = true;
     }
@@ -48,9 +48,8 @@
   }
 
   function sites(matches: string[]): string {
-    if (matches.some((m) => m === "*" || /^(\*|https?):\/\/\*\/?\*?$/.test(m) || m === "<all_urls>")) return "모든 사이트";
-    const hosts = [...new Set(matches.map((m) => m.replace(/^\w+:\/\//, "").split("/")[0].replace(/^\*\./, "").replace(/^www\./, "")))].filter((h) => h && h !== "*");
-    return hosts.length > 1 ? `${hosts[0]} 외 ${hosts.length - 1}곳` : (hosts[0] ?? "");
+    const { hosts, all } = matchSites(matches);
+    return sitesLabel(hosts, all);
   }
 
   const shown = $derived.by(() => {
@@ -61,7 +60,7 @@
 
   function install(e: StoreEntry) {
     busy = e.id;
-    host12.storeInstall(e.id).catch((err) => {
+    host.storeInstall(e.id).catch((err) => {
       busy = null;
       report(err);
     });
@@ -93,7 +92,7 @@
           <button class="btn" onclick={() => (installChoice = false)}>취소</button>
         {:else}
           <button class="btn" onclick={() => (installChoice = true)}>크롬 확장 설치…</button>
-          <button class="btn" onclick={() => host5.scriptsOpenFolder().catch(report)}>스크립트 폴더 열기</button>
+          <button class="btn" onclick={() => host.scriptsOpenFolder().catch(report)}>스크립트 폴더 열기</button>
         {/if}
       {/if}
     </div>

@@ -1,5 +1,5 @@
 // UI가 그리는 상태. 원본은 호스트에 있고, 여기 값은 호스트가 보낸 것을 받아 둔 것이다.
-import { host, host4, host7, host8, host9, host12, displayUrl, internalTitle, type ExtInfo, type Bookmarks, type Download, type Group, type PermissionRequest, type ScriptInfo, type Settings, type Tab, type TabId } from "./api";
+import { host, displayUrl, internalTitle, type ExtInfo, type Bookmarks, type Download, type Group, type PermissionRequest, type ScriptInfo, type Settings, type Tab, type TabId } from "./api";
 
 export interface MenuItem {
   label: string;
@@ -86,7 +86,7 @@ export function showInstall(info: ExtInfo) {
   const bar = document.querySelector(".address")?.getBoundingClientRect();
   const cx = bar ? bar.left + bar.width / 2 : window.innerWidth / 2;
   const y = bar ? bar.bottom + 6 : 48;
-  host4.popupShow("install", { x: Math.max(8, cx - w / 2), y, w, h: 420 }, { info }).catch(report);
+  host.popupShow("install", { x: Math.max(8, cx - w / 2), y, w, h: 420 }, { info }).catch(report);
 }
 
 /** 설치 확인을 취소한다 (Esc, 팝업 창이 닫힘) */
@@ -96,23 +96,23 @@ export function cancelInstall() {
   const fromStore = ui.install.mode === "install" || ui.install.mode === "update";
   const id = ui.install.id;
   ui.install = null;
-  if (fromStore) host12.storeConfirm(id, false).catch(() => {});
-  if (script) host4.popupHide().catch(() => {});
-  else host9.extInstallConfirm(false).catch(() => {});
+  if (fromStore) host.storeConfirm(id, false).catch(() => {});
+  if (script) host.popupHide().catch(() => {});
+  else host.extInstallConfirm(false).catch(() => {});
 }
 
 export function report(e: unknown) {
   ui.error = String(e);
   // 오류 로그 파일에도 남긴다 (spec 9장 8단계)
-  host8.logUi(ui.error).catch(() => {});
+  host.logUi(ui.error).catch(() => {});
 }
 
 /** 점 3개 메뉴 (spec 4.5): 새 버전이 있으면 맨 위에 "업데이트 설치" (spec 5.7) */
 export function moreMenuItems(): MenuItem[] {
   const items: MenuItem[] = [
-    { label: "다운로드", icon: ICONS.downloads, run: () => host4.runShortcut("downloads").catch(report) },
-    { label: "방문 기록", icon: ICONS.history, run: () => host4.runShortcut("history").catch(report) },
-    { label: "설정", icon: ICONS.settings, run: () => host4.runShortcut("settings").catch(report) },
+    { label: "다운로드", icon: ICONS.downloads, run: () => host.runShortcut("downloads").catch(report) },
+    { label: "방문 기록", icon: ICONS.history, run: () => host.runShortcut("history").catch(report) },
+    { label: "설정", icon: ICONS.settings, run: () => host.runShortcut("settings").catch(report) },
   ];
   if (ui.update) {
     items.unshift({
@@ -120,7 +120,7 @@ export function moreMenuItems(): MenuItem[] {
       icon: ICONS.update,
       run: () => {
         ui.error = `새 버전 ${ui.update}을(를) 내려받는 중입니다. 다 받으면 설치하고 다시 시작합니다. 열린 탭은 그대로 돌아옵니다.`;
-        host8.updateInstall().catch(report);
+        host.updateInstall().catch(report);
       },
     });
   }
@@ -159,13 +159,37 @@ function popupMenu(x: number, y: number, items: MenuItem[], above: boolean) {
   const h = 8 + items.length * token("--menu-item-height") + (items.length - 1) * 2;
   const top = above ? y - h : Math.min(y, window.innerHeight - h - 8);
   const data = { items: items.map((i) => ({ label: i.label, danger: !!i.danger, icon: i.icon ?? null })) };
-  host4.popupShow("menu", { x, y: Math.max(8, top), w, h }, data).catch(report);
+  host.popupShow("menu", { x, y: Math.max(8, top), w, h }, data).catch(report);
 }
 
 export function runPopupMenuItem(index: number) {
   const item = popupItems[index];
   popupItems = [];
   item?.run();
+}
+
+/** 탭 목록의 한 덩어리: 탭 하나, 또는 그룹과 그 안의 이어진 탭들 */
+export type TabBlock = { kind: "tab"; tab: Tab } | { kind: "group"; group: Group; tabs: Tab[] };
+
+/** 탭 검색에 남는 탭: 제목이나 주소에 그 글자가 들어간 탭 (spec 5.1) */
+export function searchedTabs(): Tab[] {
+  const q = ui.search.trim().toLowerCase();
+  return q ? ui.tabs.filter((t) => t.title.toLowerCase().includes(q) || t.url.toLowerCase().includes(q)) : ui.tabs;
+}
+
+/** 탭을 화면 순서대로 덩어리로 묶는다 (같은 그룹의 이어진 탭은 한 덩어리) */
+export function tabBlocks(tabs: Tab[]): TabBlock[] {
+  const out: TabBlock[] = [];
+  for (const t of tabs) {
+    const g = t.group === null ? null : ui.groups.find((x) => x.id === t.group);
+    if (!g) out.push({ kind: "tab", tab: t });
+    else {
+      const last = out[out.length - 1];
+      if (last?.kind === "group" && last.group.id === g.id) last.tabs.push(t);
+      else out.push({ kind: "group", group: g, tabs: [t] });
+    }
+  }
+  return out;
 }
 
 /** 탭 줄에 보일 이름 */
@@ -205,5 +229,5 @@ export async function setSidebarCollapsed(collapsed: boolean) {
   ui.menu = null;
   ui.scriptsOpen = false;
   ui.sidebarCollapsed = collapsed;
-  await host7.sidebarSetCollapsed(collapsed).catch(report);
+  await host.sidebarSetCollapsed(collapsed).catch(report);
 }

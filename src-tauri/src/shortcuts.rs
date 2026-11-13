@@ -1,7 +1,7 @@
 //! 단축키 (spec 5.6). 포커스가 웹 페이지 안에 있을 때는 콘텐츠 웹뷰의 AcceleratorKeyPressed로,
 //! UI에 있을 때는 UI의 keydown으로 받아 같은 이름으로 처리한다 (0단계 7번).
 
-use tauri::{AppHandle, Emitter, EventTarget, Manager};
+use tauri::{AppHandle, Manager};
 
 use crate::browser::{self, UI_WEBVIEW};
 
@@ -39,7 +39,7 @@ fn to_ui(app: &AppHandle, name: &str) {
     if let Some(ui) = app.get_webview(UI_WEBVIEW) {
         let _ = ui.set_focus();
     }
-    let _ = app.emit_to(EventTarget::webview(UI_WEBVIEW), "shortcut", name);
+    crate::browser::emit_ui(app, "shortcut", name);
 }
 
 /// 단축키를 실행한다. 메인 스레드에서, WebView2 이벤트 처리기 밖에서 부른다.

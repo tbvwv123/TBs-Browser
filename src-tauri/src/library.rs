@@ -3,9 +3,9 @@
 
 use std::sync::Mutex;
 
-use tauri::{AppHandle, Emitter, EventTarget, Manager};
+use tauri::{AppHandle, Manager};
 
-use crate::{bookmarks::Bookmarks, browser::UI_WEBVIEW, paths, storage};
+use crate::{bookmarks::Bookmarks, paths, storage};
 
 #[derive(Default)]
 pub struct Library {
@@ -57,6 +57,6 @@ pub fn edit<T>(app: &AppHandle, f: impl FnOnce(&mut Bookmarks) -> Result<T, Stri
         (out, b.clone())
     };
     let saved = storage::save(&file(), &snapshot);
-    let _ = app.emit_to(EventTarget::webview(UI_WEBVIEW), "bookmarks_changed", &snapshot);
+    crate::browser::emit_ui(app, "bookmarks_changed", &snapshot);
     saved.map(|_| out)
 }

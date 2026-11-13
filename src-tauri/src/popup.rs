@@ -13,7 +13,7 @@ use windows::Win32::{
     },
 };
 
-use crate::{browser::UI_WEBVIEW, paths};
+use crate::paths;
 
 pub const LABEL: &str = "popup";
 /// 그림자를 그릴 여백 (팝업 페이지와 같은 값)
@@ -54,6 +54,11 @@ pub fn create(app: &AppHandle, main: &Window) -> tauri::Result<()> {
     Ok(())
 }
 
+/// 팝업 창의 화면에 이벤트를 보낸다
+pub fn emit<S: serde::Serialize + Clone>(app: &AppHandle, event: &str, payload: S) {
+    let _ = app.emit_to(EventTarget::webview(LABEL), event, payload);
+}
+
 /// 메인 창 안쪽 좌표(논리 px)의 상자 자리에 팝업을 띄운다. 메인 스레드에서 부른다.
 pub fn show(app: &AppHandle, kind: &str, x: f64, y: f64, w: f64, h: f64, data: Value) {
     let (Some(popup), Some(main)) = (app.get_webview_window(LABEL), app.get_window(crate::browser::MAIN_WINDOW)) else { return };
@@ -67,7 +72,7 @@ pub fn show(app: &AppHandle, kind: &str, x: f64, y: f64, w: f64, h: f64, data: V
     if let Some(t) = data.get("theme").and_then(|t| t.as_str()) {
         *THEME.lock().unwrap() = t.to_string();
     }
-    let _ = app.emit_to(EventTarget::webview(LABEL), "popup_data", json!({ "kind": kind, "data": data }));
+    emit(app, "popup_data", json!({ "kind": kind, "data": data }));
     *KIND.lock().unwrap() = Some(kind.to_string());
     if let Ok(hwnd) = popup.hwnd() {
         unsafe {
@@ -86,7 +91,7 @@ pub fn hide(app: &AppHandle) {
             let _ = ShowWindow(HWND(hwnd.0), SW_HIDE);
         }
     }
-    let _ = app.emit_to(EventTarget::webview(UI_WEBVIEW), "popup_closed", ());
+    crate::browser::emit_ui(app, "popup_closed", ());
 }
 
 /// 팝업 화면이 잰 내용 높이에 창을 맞춘다. 확장 패널처럼 아래에 붙여 띄운 것은 아래 끝을 그대로 둔다.
@@ -123,7 +128,7 @@ pub fn refresh_downloads(app: &AppHandle) {
         hide(app);
         return;
     }
-    let _ = app.emit_to(EventTarget::webview(LABEL), "popup_data", json!({ "kind": "downloads", "data": { "items": active, "theme": *THEME.lock().unwrap() } }));
+    emit(app, "popup_data", json!({ "kind": "downloads", "data": { "items": active, "theme": *THEME.lock().unwrap() } }));
 }
 
 // ───────────── 크롬 확장의 팝업 (spec 6.6) ─────────────

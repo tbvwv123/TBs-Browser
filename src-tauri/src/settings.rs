@@ -3,9 +3,9 @@
 use std::{collections::BTreeMap, path::PathBuf, sync::Mutex};
 
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, EventTarget, Manager};
+use tauri::{AppHandle, Manager};
 
-use crate::{browser::UI_WEBVIEW, paths, storage};
+use crate::{paths, storage};
 
 pub const VERSION: u32 = 1;
 
@@ -138,7 +138,7 @@ pub fn get(app: &AppHandle) -> Settings {
 /// 설정이 바뀐 것을 UI에 다시 알린다 (목록 갱신처럼 설정 밖의 값이 바뀌었을 때)
 pub fn notify(app: &AppHandle) {
     let s = get(app);
-    let _ = app.emit_to(EventTarget::webview(UI_WEBVIEW), "settings_changed", &s);
+    crate::browser::emit_ui(app, "settings_changed", &s);
 }
 
 pub fn set(app: &AppHandle, mut s: Settings) -> Result<Settings, String> {
@@ -148,7 +148,7 @@ pub fn set(app: &AppHandle, mut s: Settings) -> Result<Settings, String> {
     s.adblock.disabled_sites.sort();
     s.adblock.disabled_sites.dedup();
     *app.state::<SettingsStore>().0.lock().unwrap() = s.clone();
-    let _ = app.emit_to(EventTarget::webview(UI_WEBVIEW), "settings_changed", &s);
+    crate::browser::emit_ui(app, "settings_changed", &s);
     storage::save(&file(), &s)?;
     Ok(s)
 }

@@ -1,7 +1,7 @@
 <script lang="ts">
   // 광고 차단 팝업 (spec 6.7, 시안 L): 이 페이지에서 막은 개수, 이 사이트에서 켜기·끄기, 목록 갱신 시각.
   // 주소창의 방패 버튼을 누르면 페이지 위 팝업 창에 뜬다.
-  import { host4, host10, whenText, type AdblockStatus } from "./api";
+  import { host, whenText, type AdblockStatus } from "./api";
 
   let { status, onError }: { status: AdblockStatus; onError: (e: unknown) => void } = $props();
 
@@ -17,12 +17,12 @@
     if (!status.site) return;
     siteOn = !siteOn;
     changed = true;
-    host10.adblockSetSite(status.site, siteOn).catch(onError);
+    host.adblockSetSite(status.site, siteOn).catch(onError);
   }
 
   function openSettings() {
-    host4.popupHide().catch(() => {});
-    host4.runShortcut("settings").catch(onError);
+    host.popupHide().catch(() => {});
+    host.runShortcut("settings").catch(onError);
   }
 </script>
 
@@ -59,7 +59,7 @@
     {#if changed}
       <div class="note">
         <span>새로고침해야 적용됩니다</span>
-        <button class="small primary" onclick={() => host10.adblockReload().catch(onError)}>새로고침</button>
+        <button class="small primary" onclick={() => host.adblockReload().catch(onError)}>새로고침</button>
       </div>
     {/if}
   {/if}

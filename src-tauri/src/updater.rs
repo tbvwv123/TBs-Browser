@@ -4,10 +4,10 @@
 
 use std::{sync::Mutex, time::Duration};
 
-use tauri::{AppHandle, Emitter, EventTarget, Manager};
+use tauri::{AppHandle, Manager};
 use tauri_plugin_updater::{Update, UpdaterExt};
 
-use crate::{browser::UI_WEBVIEW, log, session};
+use crate::{log, session};
 
 #[derive(Default)]
 pub struct UpdateState {
@@ -42,7 +42,7 @@ async fn check(app: &AppHandle) {
             log::info(format!("새 버전 있음: {} → {}", update.current_version, update.version));
             let version = update.version.clone();
             *app.state::<UpdateState>().available.lock().unwrap() = Some(update);
-            let _ = app.emit_to(EventTarget::webview(UI_WEBVIEW), "update_available", version);
+            crate::browser::emit_ui(app, "update_available", version);
         }
         Ok(None) => log::info("업데이트 확인: 최신 버전"),
         Err(e) => log::warn(format!("업데이트 확인 실패: {e}")),
@@ -89,7 +89,7 @@ pub async fn install(app: AppHandle) -> Result<(), String> {
             move |chunk, total| {
                 received += chunk as u64;
                 let fraction = total.filter(|t| *t > 0).map(|t| received as f64 / t as f64).unwrap_or(-1.0);
-                let _ = app2.emit_to(EventTarget::webview(UI_WEBVIEW), "update_progress", fraction);
+                crate::browser::emit_ui(&app2, "update_progress", fraction);
             },
             || {},
         )

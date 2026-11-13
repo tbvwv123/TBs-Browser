@@ -13,14 +13,13 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use tauri::{AppHandle, Emitter, EventTarget, Manager};
+use tauri::AppHandle;
 use windows::core::HSTRING;
 
 use crate::{
-    browser::UI_WEBVIEW,
     log,
     scripts::{self, Permission},
-    site_scripts::{self, ScriptStore},
+    site_scripts,
 };
 
 const BASE: &str = "https://raw.githubusercontent.com/tbvwv123/TBs-Browser-scripts/main/";
@@ -135,42 +134,22 @@ pub fn start(app: &AppHandle) {
     });
 }
 
-fn all_sites(matches: &[String]) -> bool {
-    matches.iter().any(|m| m == "*" || m.starts_with("*://*") || m == "https://*" || m == "http://*" || m == "<all_urls>")
-}
-
-fn sites(matches: &[String]) -> Vec<String> {
-    let mut out: Vec<String> = Vec::new();
-    for p in matches {
-        let h = p.split_once("://").map(|(_, r)| r).unwrap_or(p).split('/').next().unwrap_or("");
-        let h = h.trim_start_matches("*.").trim_start_matches("www.").to_string();
-        if !h.is_empty() && h != "*" && !out.contains(&h) {
-            out.push(h);
-        }
-    }
-    out
-}
-
 /// "설치"나 "업데이트"를 눌렀다. 설치는 늘 묻고, 업데이트는 권한이 늘었을 때만 묻는다 (시안 M)
 pub fn begin(app: &AppHandle, id: &str) -> Result<(), String> {
     let entry = entries(false)?.into_iter().find(|e| e.id == id).ok_or("저장소에 그 스크립트가 없습니다. 찾아보기를 새로 열어 주세요.")?;
-    let installed = {
-        let s = app.state::<ScriptStore>();
-        let all = s.0.lock().unwrap();
-        all.iter().find(|s| s.manifest.id == id).map(|s| (s.manifest.version.clone(), s.manifest.permissions.clone(), all_sites(&s.manifest.matches), s.manifest.matches.clone()))
-    };
+    let installed = site_scripts::with_script(app, id, |s| (s.manifest.version.clone(), s.manifest.permissions.clone(), s.all_sites(), s.manifest.matches.clone()));
     let (mode, from, new_perms, sites_changed) = match &installed {
         None => ("install", None, Vec::new(), true),
         Some((ver, perms, was_all, old_matches)) => {
             let added: Vec<Permission> = entry.permissions.iter().filter(|p| !perms.contains(p)).copied().collect();
-            let wider = all_sites(&entry.matches) && !was_all;
+            let wider = scripts::all_sites(&entry.matches) && !was_all;
             if added.is_empty() && !wider {
                 // 권한이 그대로인 업데이트는 묻지 않는다
                 let (a, e) = (app.clone(), entry.clone());
                 std::thread::spawn(move || finish(&a, e));
                 return Ok(());
             }
-            let changed = sites(&entry.matches) != sites(old_matches) || wider;
+            let changed = scripts::site_names(&entry.matches) != scripts::site_names(old_matches) || wider;
             ("update", Some(ver.clone()), added, changed)
         }
     };
@@ -179,13 +158,13 @@ pub fn begin(app: &AppHandle, id: &str) -> Result<(), String> {
         "kind": "script", "mode": mode,
         "id": entry.id, "name": entry.name, "version": entry.version, "description": entry.description, "author": entry.author,
         "enabled": false, "pinned": false, "icon": entry.icon, "popup": null, "options": null,
-        "matches": entry.matches, "allSites": all_sites(&entry.matches), "sites": sites(&entry.matches),
+        "matches": entry.matches, "allSites": scripts::all_sites(&entry.matches), "sites": scripts::site_names(&entry.matches),
         "permissions": entry.permissions.iter().map(|p| p.sentence()).collect::<Vec<_>>(),
         "newPermissions": new_perms.iter().map(|p| p.sentence()).collect::<Vec<_>>(),
         "sitesChanged": sites_changed,
         "error": null, "updateFrom": from,
     });
-    let _ = app.emit_to(EventTarget::webview(UI_WEBVIEW), "install_ready", info);
+    crate::browser::emit_ui(app, "install_ready", info);
     Ok(())
 }
 
@@ -202,12 +181,8 @@ pub fn confirm(app: &AppHandle, id: &str, accept: bool) {
 
 /// 받아서 설치하고, 끝나면 목록을 다시 읽는다. 실패하면 알린다
 fn finish(app: &AppHandle, entry: Entry) {
-    let installed_dir = {
-        let s = app.state::<ScriptStore>();
-        let all = s.0.lock().unwrap();
-        all.iter().find(|s| s.manifest.id == entry.id).map(|s| (s.dir.clone(), s.manifest.enabled, s.manifest.pinned))
-    };
-    let result = install(&entry, installed_dir.clone());
+    let installed_dir = site_scripts::with_script(app, &entry.id, |s| (s.dir.clone(), s.manifest.enabled, s.manifest.pinned));
+    let result = install(&entry, installed_dir);
     let a = app.clone();
     let name = entry.name.clone();
     let _ = app.run_on_main_thread(move || {
@@ -218,10 +193,10 @@ fn finish(app: &AppHandle, entry: Entry) {
             Err(e) => {
                 let msg = format!("{name}을(를) 설치하지 못했습니다: {e}");
                 log::warn(&msg);
-                let _ = a.emit_to(EventTarget::webview(UI_WEBVIEW), "notice", msg);
+                crate::browser::emit_ui(&a, "notice", msg);
             }
         }
-        let _ = a.emit_to(EventTarget::webview(UI_WEBVIEW), "store_done", ());
+        crate::browser::emit_ui(&a, "store_done", ());
     });
 }
 

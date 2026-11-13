@@ -15,23 +15,16 @@
   import StorePage from "./lib/pages/StorePage.svelte";
   import {
     host,
-    host4,
     on,
-    onTabsChanged,
-    onTabUpdated,
-    onBookmarksChanged,
-    onMaxButtonHover,
-    onWindowMaximized,
     shortcutName,
-    host5,
-    host7,
-    host8,
-    host9,
+    type Bookmarks,
+    type Download,
     type ExtInfo,
     type PermissionRequest,
     type ScriptInfo,
-    type Download,
     type Settings,
+    type Snapshot,
+    type Tab,
   } from "./lib/api";
   import { ui, report, activeTab, setSidebarCollapsed, runPopupMenuItem, showInstall, cancelInstall } from "./lib/store.svelte";
 
@@ -79,7 +72,7 @@
     const bg = getComputedStyle(document.documentElement).getPropertyValue("--card-bg").trim();
     const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(bg);
     const rgb: [number, number, number] = m ? [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)] : [255, 255, 255];
-    host7.applyTheme(dark, themeSetting === "system", rgb).catch(report);
+    host.applyTheme(dark, themeSetting === "system", rgb).catch(report);
   });
 
   // UI를 누르면 떠 있는 팝업(메뉴, 북마크 목록, 다운로드)을 닫는다. 주소창 자동완성은 주소창이 알아서 닫는다.
@@ -95,7 +88,7 @@
 
   function onPointerDown(e: PointerEvent) {
     if (ui.install) return;
-    if (!(e.target as Element).closest?.(".address")) host4.popupHide().catch(() => {});
+    if (!(e.target as Element).closest?.(".address")) host.popupHide().catch(() => {});
   }
 
   // 페이지 카드와 최대화 버튼 자리를 호스트에 알린다 (창 크기가 바뀔 때마다)
@@ -125,22 +118,22 @@
     const name = shortcutName(e);
     if (!name) return;
     e.preventDefault();
-    if (!local(name)) host4.runShortcut(name).catch(report);
+    if (!local(name)) host.runShortcut(name).catch(report);
   }
 
   onMount(() => {
     const unlisten = [
-      onTabsChanged((s) => {
+      on<Snapshot>("tabs_changed", (s) => {
         ui.tabs = s.tabs;
         ui.groups = s.groups;
         ui.activeId = s.active;
       }),
-      onTabUpdated((t) => {
+      on<Tab>("tab_updated", (t) => {
         ui.tabs = ui.tabs.map((x) => (x.id === t.id ? t : x));
       }),
-      onBookmarksChanged((b) => (ui.bookmarks = b)),
-      onMaxButtonHover((h) => (maxHover = h)),
-      onWindowMaximized((m) => {
+      on<Bookmarks>("bookmarks_changed", (b) => (ui.bookmarks = b)),
+      on<boolean>("max_button_hover", (h) => (maxHover = h)),
+      on<boolean>("window_maximized", (m) => {
         maximized = m;
         requestAnimationFrame(sendLayout);
       }),
@@ -175,14 +168,14 @@
       if (!activeTab()?.url) focusNewTab();
     }, report);
     host.bookmarksGet().then((b) => (ui.bookmarks = b), report);
-    host4.settingsGet().then((s) => (ui.settings = s), report);
-    host4.downloadsGet().then((d) => (ui.downloads = d), report);
-    host4.fullscreenState().then((f) => (ui.fullscreen = f), report);
-    host5.scriptsList().then((l) => (ui.scripts = l), report);
-    host7.sidebarGet().then((c) => (ui.sidebarCollapsed = c), report);
-    host7.permissionRequests().then((r) => (ui.permissions = r), report);
-    host8.updateGet().then((v) => (ui.update = v), report);
-    host9.extList().then((l) => (ui.extensions = l), report);
+    host.settingsGet().then((s) => (ui.settings = s), report);
+    host.downloadsGet().then((d) => (ui.downloads = d), report);
+    host.fullscreenState().then((f) => (ui.fullscreen = f), report);
+    host.scriptsList().then((l) => (ui.scripts = l), report);
+    host.sidebarGet().then((c) => (ui.sidebarCollapsed = c), report);
+    host.permissionRequests().then((r) => (ui.permissions = r), report);
+    host.updateGet().then((v) => (ui.update = v), report);
+    host.extList().then((l) => (ui.extensions = l), report);
     host.takeNotices().then((n) => n.length && (ui.error = n.join("\n")), report);
     const ro = new ResizeObserver(sendLayout);
     ro.observe(card);
