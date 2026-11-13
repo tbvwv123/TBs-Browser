@@ -167,6 +167,35 @@ thread_local! {
     static MAIN_NAV: RefCell<HashMap<TabId, String>> = RefCell::new(HashMap::new());
     /// 탭마다 걸어 둔 스크립틀릿의 WebView2 스크립트 ID
     static SCRIPTLETS: RefCell<HashMap<TabId, String>> = RefCell::new(HashMap::new());
+    /// 엔진이 준비되면 할 일 (새 탭의 첫 이동)
+    static WAITING: RefCell<Vec<Box<dyn FnOnce()>>> = RefCell::new(Vec::new());
+}
+
+/// 엔진이 준비된 뒤에 `f`를 부른다 (메인 스레드에서 부른다).
+/// 시작할 때 다시 연 탭이 엔진보다 먼저 열리면 그 페이지에는 숨기기와 스크립틀릿이 걸리지 않는다.
+/// 광고 차단이 꺼져 있거나 엔진이 있으면 바로, 5초가 지나면 더 기다리지 않는다.
+pub fn when_ready(app: &AppHandle, f: Box<dyn FnOnce()>) {
+    if with(|s| !s.enabled || s.engine.is_some()) {
+        return f();
+    }
+    let first = WAITING.with(|w| {
+        let mut w = w.borrow_mut();
+        w.push(f);
+        w.len() == 1
+    });
+    if first {
+        let app = app.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_secs(5));
+            browser::later(&app, |_| flush_waiting());
+        });
+    }
+}
+
+fn flush_waiting() {
+    for f in WAITING.with(|w| std::mem::take(&mut *w.borrow_mut())) {
+        f();
+    }
 }
 
 fn dir() -> PathBuf {
@@ -272,6 +301,7 @@ fn rebuild(app: &AppHandle, refresh: bool) {
         s.busy = false;
         s.error = (!errors.is_empty()).then(|| errors.join("\n"));
     });
+    browser::later(app, |_| flush_waiting());
     if !errors.is_empty() {
         log::warn(format!("광고 차단 목록 갱신 실패: {}", errors.join(" / ")));
     }

@@ -751,13 +751,20 @@ fn create_webview(app: &AppHandle, id: TabId, url: Option<Url>, focus: bool, aft
             let _ = unsafe { p.controller().MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC) };
         }
         let core2 = core.clone();
+        let app4 = app2.clone();
         site_scripts::apply(
             &app2,
             id,
             &core,
             Box::new(move || {
                 if let Some(u) = url {
-                    let _ = unsafe { core2.Navigate(&windows::core::HSTRING::from(u.as_str())) };
+                    let c = core2.clone();
+                    crate::adblock::when_ready(
+                        &app4,
+                        Box::new(move || {
+                            let _ = unsafe { c.Navigate(&windows::core::HSTRING::from(u.as_str())) };
+                        }),
+                    );
                 }
                 if let Some(after) = after {
                     (after.0)(&core2);
