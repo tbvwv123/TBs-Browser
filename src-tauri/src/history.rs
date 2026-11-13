@@ -2,8 +2,12 @@
 
 use std::{path::Path, sync::Mutex};
 
-use rusqlite::{params, Connection, OptionalExtension};
-use serde::Serialize;
+use rusqlite::{
+    params,
+    types::{FromSql, FromSqlResult, ToSqlOutput, ValueRef},
+    Connection, OptionalExtension, ToSql,
+};
+use serde::{Deserialize, Serialize};
 use tauri::Url;
 
 #[derive(Clone, Debug, Serialize, PartialEq)]
@@ -36,14 +40,51 @@ pub struct TopSite {
     pub favicon: Option<String>,
 }
 
+/// 다운로드의 상태. UI에 보내는 글자와 DB의 state 칸(TEXT)에 쓰는 글자가 같다 (as_str)
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum DownloadState {
+    Progress,
+    Done,
+    Cancelled,
+    Failed,
+}
+
+impl DownloadState {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            DownloadState::Progress => "progress",
+            DownloadState::Done => "done",
+            DownloadState::Cancelled => "cancelled",
+            DownloadState::Failed => "failed",
+        }
+    }
+}
+
+impl ToSql for DownloadState {
+    fn to_sql(&self) -> rusqlite::Result<ToSqlOutput<'_>> {
+        Ok(ToSqlOutput::from(self.as_str()))
+    }
+}
+
+impl FromSql for DownloadState {
+    /// 모르는 글자(다른 판이 쓴 것 등)는 실패로 읽는다. 기록을 버리거나 멈추지 않는다
+    fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+        let text = value.as_str()?;
+        Ok([DownloadState::Progress, DownloadState::Done, DownloadState::Cancelled]
+            .into_iter()
+            .find(|s| s.as_str() == text)
+            .unwrap_or(DownloadState::Failed))
+    }
+}
+
 #[derive(Clone, Debug, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Download {
     pub id: i64,
     pub url: String,
     pub path: String,
-    /// "progress" | "done" | "cancelled" | "failed"
-    pub state: String,
+    pub state: DownloadState,
     pub received: i64,
     /// 모르면 -1
     pub total: i64,
@@ -220,14 +261,14 @@ impl History {
     pub fn add_download(&self, url: &str, path: &str, total: i64) -> Result<i64, String> {
         let c = self.0.lock().unwrap();
         c.execute(
-            "INSERT INTO downloads (url, path, state, received, total, time) VALUES (?1, ?2, 'progress', 0, ?3, ?4)",
-            params![url, path, total, now_ms()],
+            "INSERT INTO downloads (url, path, state, received, total, time) VALUES (?1, ?2, ?3, 0, ?4, ?5)",
+            params![url, path, DownloadState::Progress, total, now_ms()],
         )
         .map_err(err)?;
         Ok(c.last_insert_rowid())
     }
 
-    pub fn update_download(&self, id: i64, state: &str, received: i64, total: i64, path: &str) -> Result<(), String> {
+    pub fn update_download(&self, id: i64, state: DownloadState, received: i64, total: i64, path: &str) -> Result<(), String> {
         self.0
             .lock()
             .unwrap()
@@ -258,7 +299,10 @@ impl History {
 
     /// 지난 실행에서 끝나지 않은 다운로드는 실패로 표시한다
     pub fn mark_unfinished_failed(&self) {
-        let _ = self.0.lock().unwrap().execute("UPDATE downloads SET state = 'failed' WHERE state = 'progress'", []);
+        let _ = self.0.lock().unwrap().execute(
+            "UPDATE downloads SET state = ?1 WHERE state = ?2",
+            params![DownloadState::Failed, DownloadState::Progress],
+        );
     }
 }
 
@@ -332,13 +376,40 @@ mod tests {
     fn downloads_round_trip() {
         let h = History::in_memory();
         let id = h.add_download("https://x/file.zip", "C:\\d\\file.zip", 100).unwrap();
-        h.update_download(id, "done", 100, 100, "C:\\d\\file.zip").unwrap();
+        h.update_download(id, DownloadState::Done, 100, 100, "C:\\d\\file.zip").unwrap();
         let d = h.download(id).unwrap();
-        assert_eq!(d.state, "done");
+        assert_eq!(d.state, DownloadState::Done);
         let id2 = h.add_download("https://x/b.zip", "C:\\d\\b.zip", -1).unwrap();
         h.mark_unfinished_failed();
-        assert_eq!(h.download(id2).unwrap().state, "failed");
+        assert_eq!(h.download(id2).unwrap().state, DownloadState::Failed);
         assert_eq!(h.downloads(10).unwrap().len(), 2);
+    }
+
+    #[test]
+    fn download_state_strings() {
+        let h = History::in_memory();
+        let id = h.add_download("https://x/a.zip", "C:\\d\\a.zip", -1).unwrap();
+        let raw = |h: &History| {
+            let c = h.0.lock().unwrap();
+            c.query_row("SELECT state FROM downloads WHERE id = ?1", params![id], |r| r.get::<_, String>(0)).unwrap()
+        };
+        assert_eq!(raw(&h), "progress");
+        for (s, text) in [
+            (DownloadState::Progress, "progress"),
+            (DownloadState::Done, "done"),
+            (DownloadState::Cancelled, "cancelled"),
+            (DownloadState::Failed, "failed"),
+        ] {
+            assert_eq!(serde_json::to_value(s).unwrap(), text);
+            assert_eq!(serde_json::from_value::<DownloadState>(text.into()).unwrap(), s);
+            h.update_download(id, s, 0, -1, "C:\\d\\a.zip").unwrap();
+            assert_eq!(raw(&h), text);
+            assert_eq!(h.download(id).unwrap().state, s);
+        }
+        // 모르는 글자는 실패로 읽고 기록은 남긴다
+        h.0.lock().unwrap().execute("UPDATE downloads SET state = 'paused' WHERE id = ?1", params![id]).unwrap();
+        assert_eq!(h.download(id).unwrap().state, DownloadState::Failed);
+        assert_eq!(h.downloads(10).unwrap().len(), 1);
     }
 
     #[test]

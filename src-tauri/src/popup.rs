@@ -27,8 +27,21 @@ static RECT: Mutex<(f64, f64, f64, f64)> = Mutex::new((0.0, 0.0, 0.0, 0.0));
 /// 아래 끝을 맞춰 띄운 팝업(확장 패널)의 아래 끝. 높이를 맞출 때 이 자리를 지킨다
 static BOTTOM: Mutex<f64> = Mutex::new(0.0);
 
-/// 지금 떠 있는 팝업의 종류 ("suggest" | "downloads" | "menu" | "bookmarks")
-static KIND: Mutex<Option<String>> = Mutex::new(None);
+/// 팝업의 종류. 글자 꼴(소문자)은 UI의 PopupKind (src/lib/api.ts), popup_data의 kind와 같다
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Kind {
+    Suggest,
+    Downloads,
+    Menu,
+    Bookmarks,
+    Extensions,
+    Install,
+    Adblock,
+}
+
+/// 지금 떠 있는 팝업의 종류
+static KIND: Mutex<Option<Kind>> = Mutex::new(None);
 
 pub fn create(app: &AppHandle, main: &Window) -> tauri::Result<()> {
     let w = WebviewWindowBuilder::new(app, LABEL, WebviewUrl::App("index.html#popup".into()))
@@ -60,7 +73,7 @@ pub fn emit<S: serde::Serialize + Clone>(app: &AppHandle, event: &str, payload: 
 }
 
 /// 메인 창 안쪽 좌표(논리 px)의 상자 자리에 팝업을 띄운다. 메인 스레드에서 부른다.
-pub fn show(app: &AppHandle, kind: &str, x: f64, y: f64, w: f64, h: f64, data: Value) {
+pub fn show(app: &AppHandle, kind: Kind, x: f64, y: f64, w: f64, h: f64, data: Value) {
     let (Some(popup), Some(main)) = (app.get_webview_window(LABEL), app.get_window(crate::browser::MAIN_WINDOW)) else { return };
     let scale = main.scale_factor().unwrap_or(1.0);
     let Ok(origin) = main.inner_position() else { return };
@@ -73,7 +86,7 @@ pub fn show(app: &AppHandle, kind: &str, x: f64, y: f64, w: f64, h: f64, data: V
         *THEME.lock().unwrap() = t.to_string();
     }
     emit(app, "popup_data", json!({ "kind": kind, "data": data }));
-    *KIND.lock().unwrap() = Some(kind.to_string());
+    *KIND.lock().unwrap() = Some(kind);
     if let Ok(hwnd) = popup.hwnd() {
         unsafe {
             let _ = ShowWindow(HWND(hwnd.0), SW_SHOWNOACTIVATE);
@@ -97,14 +110,14 @@ pub fn hide(app: &AppHandle) {
 /// 팝업 화면이 잰 내용 높이에 창을 맞춘다. 확장 패널처럼 아래에 붙여 띄운 것은 아래 끝을 그대로 둔다.
 pub fn fit(app: &AppHandle, h: f64) {
     let (Some(popup), Some(main)) = (app.get_webview_window(LABEL), app.get_window(crate::browser::MAIN_WINDOW)) else { return };
-    let Some(kind) = KIND.lock().unwrap().clone() else { return };
+    let Some(kind) = *KIND.lock().unwrap() else { return };
     let (x, y, w, _) = *RECT.lock().unwrap();
     let scale = main.scale_factor().unwrap_or(1.0);
     let Ok(origin) = main.inner_position() else { return };
     let origin = origin.to_logical::<f64>(scale);
     let win_h = main.inner_size().map(|s| s.to_logical::<f64>(scale).height).unwrap_or(800.0);
     let h = h.clamp(40.0, (win_h - 16.0).max(40.0));
-    let y = if kind == "extensions" { (*BOTTOM.lock().unwrap() - h).max(8.0) } else { y };
+    let y = if kind == Kind::Extensions { (*BOTTOM.lock().unwrap() - h).max(8.0) } else { y };
     let _ = popup.set_position(LogicalPosition::new(origin.x + x - MARGIN, origin.y + y));
     let _ = popup.set_size(LogicalSize::new(w + MARGIN * 2.0, h + MARGIN));
     *RECT.lock().unwrap() = (x, y, w, h);
@@ -114,21 +127,22 @@ pub fn is_open() -> bool {
     KIND.lock().unwrap().is_some()
 }
 
-pub fn is_showing(kind: &str) -> bool {
-    KIND.lock().unwrap().as_deref() == Some(kind)
+pub fn is_showing(kind: Kind) -> bool {
+    *KIND.lock().unwrap() == Some(kind)
 }
 
 /// 다운로드 목록이 떠 있으면 내용을 새로 보낸다. 진행 중인 것이 없으면 닫는다.
 pub fn refresh_downloads(app: &AppHandle) {
-    if !is_showing("downloads") {
+    if !is_showing(Kind::Downloads) {
         return;
     }
-    let active: Vec<_> = crate::downloads::list(app).into_iter().filter(|d| d.state == "progress").collect();
+    let active: Vec<_> =
+        crate::downloads::list(app).into_iter().filter(|d| d.state == crate::history::DownloadState::Progress).collect();
     if active.is_empty() {
         hide(app);
         return;
     }
-    emit(app, "popup_data", json!({ "kind": "downloads", "data": { "items": active, "theme": *THEME.lock().unwrap() } }));
+    emit(app, "popup_data", json!({ "kind": Kind::Downloads, "data": { "items": active, "theme": *THEME.lock().unwrap() } }));
 }
 
 // ───────────── 크롬 확장의 팝업 (spec 6.6) ─────────────
@@ -287,5 +301,19 @@ pub fn close_extension(app: &AppHandle) {
         if label.starts_with(EXT_LABEL_PREFIX) {
             let _ = w.close();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Kind;
+
+    #[test]
+    fn kind_names() {
+        for n in ["suggest", "downloads", "menu", "bookmarks", "extensions", "install", "adblock"] {
+            let k: Kind = serde_json::from_value(n.into()).unwrap();
+            assert_eq!(serde_json::to_value(k).unwrap(), n);
+        }
+        assert!(serde_json::from_value::<Kind>("nope".into()).is_err());
     }
 }

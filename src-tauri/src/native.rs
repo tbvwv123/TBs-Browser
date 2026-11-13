@@ -21,7 +21,7 @@ pub enum Event {
     /// 이동이 끝났다 (성공했는지)
     Completed(bool),
     /// 페이지에 포커스가 있을 때 누른 브라우저 단축키 (spec 5.6)
-    Shortcut(&'static str),
+    Shortcut(crate::shortcuts::Shortcut),
     /// 사이트 스크립트의 단축키 (스크립트 id, 단축키 id)
     ScriptShortcut(String, String),
     History { back: bool, forward: bool },

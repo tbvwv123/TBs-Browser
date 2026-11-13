@@ -10,7 +10,7 @@ use windows::core::{Interface, HSTRING, PWSTR};
 
 use crate::{
     state::TabId,
-    history::{Download, History},
+    history::{Download, DownloadState, History},
     settings,
 };
 
@@ -115,7 +115,7 @@ pub fn attach(app: &AppHandle, core: &ICoreWebView2, tab: TabId) -> Option<i64> 
 pub fn record_saved(app: &AppHandle, page: &str, path: &std::path::Path, size: i64) {
     let hist = app.state::<History>();
     if let Ok(id) = hist.add_download(page, &path.to_string_lossy(), size) {
-        let _ = hist.update_download(id, "done", size, size, &path.to_string_lossy());
+        let _ = hist.update_download(id, DownloadState::Done, size, size, &path.to_string_lossy());
     }
     emit_list(app);
 }
@@ -137,25 +137,25 @@ fn progress(app: &AppHandle, id: i64, op: &ICoreWebView2DownloadOperation, state
         let _ = op.ResultFilePath(&mut path);
     }
     let state = match st {
-        COREWEBVIEW2_DOWNLOAD_STATE_COMPLETED => "done",
+        COREWEBVIEW2_DOWNLOAD_STATE_COMPLETED => DownloadState::Done,
         COREWEBVIEW2_DOWNLOAD_STATE_INTERRUPTED => {
             let mut reason = COREWEBVIEW2_DOWNLOAD_INTERRUPT_REASON::default();
             let _ = unsafe { op.InterruptReason(&mut reason) };
             if reason == COREWEBVIEW2_DOWNLOAD_INTERRUPT_REASON_USER_CANCELED {
-                "cancelled"
+                DownloadState::Cancelled
             } else {
                 crate::log::warn(format!("다운로드 {id} 실패, 이유 코드 {}", reason.0));
-                "failed"
+                DownloadState::Failed
             }
         }
-        _ => "progress",
+        _ => DownloadState::Progress,
     };
     let hist = app.state::<History>();
     let _ = hist.update_download(id, state, received, total, &take_pwstr(path));
-    if state != "progress" {
+    if state != DownloadState::Progress {
         ACTIVE.with(|a| a.borrow_mut().remove(&id));
     }
-    if state_changed || state != "progress" {
+    if state_changed || state != DownloadState::Progress {
         emit_list(app);
     } else if let Some(d) = hist.download(id) {
         crate::browser::emit_ui(app, "download_progress", &d);
@@ -170,8 +170,8 @@ pub fn cancel(app: &AppHandle, id: i64) {
     }
     // 이번 실행에서 받는 중이 아닌 항목: 기록이 "받는 중"으로 남아 있을 때만 취소로 바꾼다
     let hist = app.state::<History>();
-    if let Some(d) = hist.download(id).filter(|d| d.state == "progress") {
-        let _ = hist.update_download(id, "cancelled", d.received, d.total, &d.path);
+    if let Some(d) = hist.download(id).filter(|d| d.state == DownloadState::Progress) {
+        let _ = hist.update_download(id, DownloadState::Cancelled, d.received, d.total, &d.path);
         emit_list(app);
     }
 }

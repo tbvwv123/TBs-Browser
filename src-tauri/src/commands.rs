@@ -358,14 +358,14 @@ pub async fn download_cancel(app: AppHandle, id: i64) -> Result<(), String> {
 
 /// UI에 포커스가 있을 때 누른 단축키 (spec 5.6)
 #[tauri::command]
-pub async fn run_shortcut(app: AppHandle, name: String) -> Result<(), String> {
-    on_main(&app, move |a| shortcuts::run(a, &name))
+pub async fn run_shortcut(app: AppHandle, name: shortcuts::Shortcut) -> Result<(), String> {
+    on_main(&app, move |a| shortcuts::run(a, name))
 }
 
 /// 콘텐츠 위에 팝업을 띄운다. 자리는 메인 창 안쪽 좌표(논리 px).
 #[tauri::command]
-pub async fn popup_show(app: AppHandle, kind: String, x: f64, y: f64, w: f64, h: f64, data: serde_json::Value) -> Result<(), String> {
-    on_main(&app, move |a| popup::show(a, &kind, x, y, w, h, data))
+pub async fn popup_show(app: AppHandle, kind: popup::Kind, x: f64, y: f64, w: f64, h: f64, data: serde_json::Value) -> Result<(), String> {
+    on_main(&app, move |a| popup::show(a, kind, x, y, w, h, data))
 }
 
 #[tauri::command]

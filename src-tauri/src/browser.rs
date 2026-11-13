@@ -835,7 +835,7 @@ fn on_event(app: &AppHandle, id: TabId, ev: Event) {
         Event::GotFocus => {
             // 페이지를 누르면 떠 있는 팝업(메뉴, 북마크 목록 등)을 닫는다
             // 설치·권한 확인은 바깥을 눌러도 닫지 않는다 (시안 M)
-            if popup::is_open() && !popup::is_showing("install") {
+            if popup::is_open() && !popup::is_showing(popup::Kind::Install) {
                 later(app, popup::hide);
             }
             return;

@@ -379,8 +379,8 @@ pub fn handle_message(app: &AppHandle, tab: TabId, core: &ICoreWebView2, source:
                 "forward" => crate::browser::go_forward(a, tab),
                 "reload" => crate::browser::reload(a, tab),
                 "close" => crate::browser::close(a, tab),
-                "newTab" => crate::shortcuts::run(a, "new_tab"),
-                "reopen" => crate::shortcuts::run(a, "reopen_tab"),
+                "newTab" => crate::shortcuts::run(a, crate::shortcuts::Shortcut::NewTab),
+                "reopen" => crate::shortcuts::run(a, crate::shortcuts::Shortcut::ReopenTab),
                 "next" => crate::browser::activate_neighbor(a, true),
                 "prev" => crate::browser::activate_neighbor(a, false),
                 // 홈: 이 탭을 새 탭 화면으로
